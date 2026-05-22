@@ -257,8 +257,10 @@ module.exports = async (req, res, next) => {
 
     // Cache check — skip the DB fetch and Claude ranking if we have a fresh result
     const key = cacheKey(trimmed, intent);
-    const cachedVenues = await cache.getCached(key);
-    if (cachedVenues) {
+    // TEMP: Disable cache to debug ranking issues
+    // const cachedVenues = await cache.getCached(key);
+    const cachedVenues = null;
+    if (cachedVenues && false) {
       // TEMP: Disable quota decrement for MVP testing
       // if (!isPaid) {
       //   await db.none(
