@@ -100,6 +100,34 @@ async function fetchCandidates(intent) {
   const lngDelta = radiusKm / (111.0 * Math.cos(center.lat * (Math.PI / 180)));
   const maxPrice = budgetToPriceRange(intent.budget);
 
+  // If user specified a cuisine preference, prioritize matching venues
+  let cuisineFilter = '';
+  let params = [
+    center.lat - latDelta, center.lat + latDelta,
+    center.lng - lngDelta, center.lng + lngDelta,
+    maxPrice,
+  ];
+
+  // Simple cuisine keyword detection
+  const query = intent.query?.toLowerCase() || '';
+  const cuisineKeywords = {
+    'coffee': ['café', 'coffee', 'kahve'],
+    'burger': ['burger', 'beef'],
+    'pizza': ['pizza', 'italian'],
+    'thai': ['thai'],
+    'indian': ['indian'],
+    'sushi': ['sushi', 'japanese'],
+    'mexican': ['mexican'],
+  };
+
+  for (const [keyword, cuisines] of Object.entries(cuisineKeywords)) {
+    if (query.includes(keyword)) {
+      const cuisinePatterns = cuisines.map(c => `'${c}'`).join(',');
+      cuisineFilter = `AND (cuisine_tags IS NOT NULL AND EXISTS(SELECT 1 FROM unnest(cuisine_tags) AS tag WHERE LOWER(tag) LIKE ANY(ARRAY[${cuisinePatterns.split(',').map(c => `'%' || ${c} || '%'`).join(',')}])))`;
+      break;
+    }
+  }
+
   return db.any(
     `SELECT id, name, address, lat, lng, cuisine_tags, price_range,
             google_rating, review_count, phone, website, open_hours,
@@ -108,14 +136,11 @@ async function fetchCandidates(intent) {
      WHERE lat::float BETWEEN $1 AND $2
        AND lng::float BETWEEN $3 AND $4
        AND ($5::int IS NULL OR price_range IS NULL OR price_range <= $5)
+       ${cuisineFilter}
      ORDER BY google_rating::float DESC NULLS LAST,
               review_count DESC NULLS LAST
-     LIMIT 20`,
-    [
-      center.lat - latDelta, center.lat + latDelta,
-      center.lng - lngDelta, center.lng + lngDelta,
-      maxPrice,
-    ]
+     LIMIT 30`,
+    params
   );
 }
 
