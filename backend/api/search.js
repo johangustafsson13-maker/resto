@@ -285,7 +285,35 @@ module.exports = async (req, res, next) => {
     // 3. Rank by relevance — gracefully degrade if Claude call fails
     let venues;
     try {
-      venues = await rankCandidates(candidates, intent, topN);
+      // Only pass filtered candidates to Claude (if cuisine was prioritized, use those)
+      const queryLower = trimmed.toLowerCase();
+      const cuisineKeywords = {
+        'coffee': ['café', 'coffee', 'kahve', 'cafe'],
+        'burger': ['burger', 'beef'],
+        'pizza': ['pizza', 'italian'],
+        'thai': ['thai'],
+        'indian': ['indian'],
+        'sushi': ['sushi', 'japanese'],
+        'mexican': ['mexican'],
+      };
+
+      let rankedCandidates = candidates;
+      for (const [keyword, cuisines] of Object.entries(cuisineKeywords)) {
+        if (queryLower.includes(keyword)) {
+          const matching = candidates.filter(v =>
+            v.cuisine_tags && v.cuisine_tags.some(tag =>
+              cuisines.some(c => tag.toLowerCase().includes(c))
+            )
+          );
+          // If we found matches, ONLY rank those
+          if (matching.length > 0) {
+            rankedCandidates = matching;
+          }
+          break;
+        }
+      }
+
+      venues = await rankCandidates(rankedCandidates, intent, topN);
     } catch (err) {
       console.error('[search] ranking failed:', err.message);
       venues = candidates.slice(0, topN).map(v => buildResponseVenue(v));
