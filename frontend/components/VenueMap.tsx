@@ -10,6 +10,7 @@ interface VenueMapProps {
 
 export default function VenueMap({ venues, onVenueSelect }: VenueMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
+  // @ts-ignore
   const map = useRef<mapboxgl.Map | null>(null)
 
   useEffect(() => {
