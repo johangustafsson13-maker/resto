@@ -92,8 +92,8 @@ async function parseQueryIntent(query) {
 async function fetchCandidates(intent, query) {
   const locationCoords = resolveNeighborhood(intent.location);
   const center = locationCoords || STOCKHOLM_CENTER;
-  // Narrower radius when user specified a location; wider for "anywhere"
-  const radiusKm = locationCoords ? 2.0 : 6.0;
+  // Wider radius to ensure we get enough matches for specialty cuisines
+  const radiusKm = locationCoords ? 3.0 : 6.0;
 
   // Approximate bounding box — 1° lat ≈ 111 km; 1° lng ≈ 57 km at Stockholm's latitude
   const latDelta = radiusKm / 111.0;
@@ -110,7 +110,7 @@ async function fetchCandidates(intent, query) {
        AND ($5::int IS NULL OR price_range IS NULL OR price_range <= $5)
      ORDER BY google_rating::float DESC NULLS LAST,
               review_count DESC NULLS LAST
-     LIMIT 50`,
+     LIMIT 80`,
     [
       center.lat - latDelta, center.lat + latDelta,
       center.lng - lngDelta, center.lng + lngDelta,
@@ -304,10 +304,15 @@ module.exports = async (req, res, next) => {
             cuisines.some(c => tag.toLowerCase().includes(c))
           )
         );
-        // If we found matches, use those
+
+        console.log(`[search] Query: "${trimmed}"`);
+        console.log(`[search] Looking for cuisines: ${cuisines.join(', ')}`);
+        console.log(`[search] Candidates: ${candidates.map(c => `${c.name} (${c.cuisine_tags})`).join(' | ')}`);
+        console.log(`[search] Matching: ${matching.map(m => m.name).join(', ')}`);
+
+        // If we found matches, use ONLY those
         if (matching.length > 0) {
           venues = matching;
-          console.log(`[search] Filtered by "${keyword}": ${matching.length} venues found`);
         }
         break;
       }
