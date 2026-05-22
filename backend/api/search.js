@@ -89,7 +89,7 @@ async function parseQueryIntent(query) {
 
 // ─── Step 2: Filter venues from DB ───────────────────────────────────────────
 
-async function fetchCandidates(intent) {
+async function fetchCandidates(intent, query) {
   const locationCoords = resolveNeighborhood(intent.location);
   const center = locationCoords || STOCKHOLM_CENTER;
   // Narrower radius when user specified a location; wider for "anywhere"
@@ -100,18 +100,28 @@ async function fetchCandidates(intent) {
   const lngDelta = radiusKm / (111.0 * Math.cos(center.lat * (Math.PI / 180)));
   const maxPrice = budgetToPriceRange(intent.budget);
 
-  // If user specified a cuisine preference, prioritize matching venues
-  let cuisineFilter = '';
-  let params = [
-    center.lat - latDelta, center.lat + latDelta,
-    center.lng - lngDelta, center.lng + lngDelta,
-    maxPrice,
-  ];
+  const candidates = await db.any(
+    `SELECT id, name, address, lat, lng, cuisine_tags, price_range,
+            google_rating, review_count, phone, website, open_hours,
+            outdoor_seating, kid_friendly, wheelchair_accessible, wifi
+     FROM venues
+     WHERE lat::float BETWEEN $1 AND $2
+       AND lng::float BETWEEN $3 AND $4
+       AND ($5::int IS NULL OR price_range IS NULL OR price_range <= $5)
+     ORDER BY google_rating::float DESC NULLS LAST,
+              review_count DESC NULLS LAST
+     LIMIT 50`,
+    [
+      center.lat - latDelta, center.lat + latDelta,
+      center.lng - lngDelta, center.lng + lngDelta,
+      maxPrice,
+    ]
+  );
 
-  // Simple cuisine keyword detection
-  const query = intent.query?.toLowerCase() || '';
+  // Post-process: prioritize by cuisine if specified
+  const queryLower = (query || '').toLowerCase();
   const cuisineKeywords = {
-    'coffee': ['café', 'coffee', 'kahve'],
+    'coffee': ['café', 'coffee', 'kahve', 'cafe'],
     'burger': ['burger', 'beef'],
     'pizza': ['pizza', 'italian'],
     'thai': ['thai'],
@@ -121,27 +131,19 @@ async function fetchCandidates(intent) {
   };
 
   for (const [keyword, cuisines] of Object.entries(cuisineKeywords)) {
-    if (query.includes(keyword)) {
-      const cuisinePatterns = cuisines.map(c => `'${c}'`).join(',');
-      cuisineFilter = `AND (cuisine_tags IS NOT NULL AND EXISTS(SELECT 1 FROM unnest(cuisine_tags) AS tag WHERE LOWER(tag) LIKE ANY(ARRAY[${cuisinePatterns.split(',').map(c => `'%' || ${c} || '%'`).join(',')}])))`;
-      break;
+    if (queryLower.includes(keyword)) {
+      // Separate matching and non-matching venues
+      const matching = candidates.filter(v =>
+        v.cuisine_tags && v.cuisine_tags.some(tag =>
+          cuisines.some(c => tag.toLowerCase().includes(c))
+        )
+      );
+      // Return matching first, then others
+      return [...matching, ...candidates.filter(v => !matching.includes(v))];
     }
   }
 
-  return db.any(
-    `SELECT id, name, address, lat, lng, cuisine_tags, price_range,
-            google_rating, review_count, phone, website, open_hours,
-            outdoor_seating, kid_friendly, wheelchair_accessible, wifi
-     FROM venues
-     WHERE lat::float BETWEEN $1 AND $2
-       AND lng::float BETWEEN $3 AND $4
-       AND ($5::int IS NULL OR price_range IS NULL OR price_range <= $5)
-       ${cuisineFilter}
-     ORDER BY google_rating::float DESC NULLS LAST,
-              review_count DESC NULLS LAST
-     LIMIT 30`,
-    params
-  );
+  return candidates;
 }
 
 // ─── Step 3: Rank via Claude ──────────────────────────────────────────────────
@@ -270,7 +272,7 @@ module.exports = async (req, res, next) => {
     // 2. Filter candidates from database
     let candidates;
     try {
-      candidates = await fetchCandidates(intent);
+      candidates = await fetchCandidates(intent, trimmed);
     } catch (err) {
       console.error('[search] db query failed:', err.message);
       return res.status(500).json({ error: 'Database error' });
