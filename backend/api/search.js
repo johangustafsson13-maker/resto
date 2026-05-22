@@ -309,6 +309,8 @@ module.exports = async (req, res, next) => {
           );
           // If we found matches, ONLY rank those
           if (matching.length > 0) {
+            console.log(`[search] Filtered by "${keyword}" cuisine: ${matching.length} venues`);
+            console.log(`[search] Top match: ${matching[0].name} (cuisine: ${matching[0].cuisine_tags})`);
             rankedCandidates = matching;
           }
           break;
