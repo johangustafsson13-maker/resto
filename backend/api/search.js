@@ -284,44 +284,39 @@ module.exports = async (req, res, next) => {
       return res.json({ query: trimmed, intent, venues: [] });
     }
 
-    // 3. Rank by relevance — gracefully degrade if Claude call fails
-    let venues;
-    try {
-      // Only pass filtered candidates to Claude (if cuisine was prioritized, use those)
-      const queryLower = trimmed.toLowerCase();
-      const cuisineKeywords = {
-        'coffee': ['café', 'coffee', 'kahve', 'cafe'],
-        'burger': ['burger', 'beef'],
-        'pizza': ['pizza', 'italian'],
-        'thai': ['thai'],
-        'indian': ['indian'],
-        'sushi': ['sushi', 'japanese'],
-        'mexican': ['mexican'],
-      };
+    // 3. Filter by cuisine and return top-rated venues (simple, reliable approach)
+    const queryLower = trimmed.toLowerCase();
+    const cuisineKeywords = {
+      'coffee': ['café', 'coffee', 'kahve', 'cafe'],
+      'burger': ['burger', 'beef'],
+      'pizza': ['pizza', 'italian'],
+      'thai': ['thai'],
+      'indian': ['indian'],
+      'sushi': ['sushi', 'japanese'],
+      'mexican': ['mexican'],
+    };
 
-      let rankedCandidates = candidates;
-      for (const [keyword, cuisines] of Object.entries(cuisineKeywords)) {
-        if (queryLower.includes(keyword)) {
-          const matching = candidates.filter(v =>
-            v.cuisine_tags && v.cuisine_tags.some(tag =>
-              cuisines.some(c => tag.toLowerCase().includes(c))
-            )
-          );
-          // If we found matches, ONLY rank those
-          if (matching.length > 0) {
-            console.log(`[search] Filtered by "${keyword}" cuisine: ${matching.length} venues`);
-            console.log(`[search] Top match: ${matching[0].name} (cuisine: ${matching[0].cuisine_tags})`);
-            rankedCandidates = matching;
-          }
-          break;
+    let venues = candidates;
+    for (const [keyword, cuisines] of Object.entries(cuisineKeywords)) {
+      if (queryLower.includes(keyword)) {
+        const matching = candidates.filter(v =>
+          v.cuisine_tags && v.cuisine_tags.some(tag =>
+            cuisines.some(c => tag.toLowerCase().includes(c))
+          )
+        );
+        // If we found matches, use those
+        if (matching.length > 0) {
+          venues = matching;
+          console.log(`[search] Filtered by "${keyword}": ${matching.length} venues found`);
         }
+        break;
       }
-
-      venues = await rankCandidates(rankedCandidates, intent, topN);
-    } catch (err) {
-      console.error('[search] ranking failed:', err.message);
-      venues = candidates.slice(0, topN).map(v => buildResponseVenue(v));
     }
+
+    // Return top venues sorted by rating
+    venues = venues
+      .slice(0, topN)
+      .map(v => buildResponseVenue(v, `${v.name} in ${intent.location || 'Stockholm'}`))
 
     // Write-through cache — fire-and-forget, never delays the response
     cache.setCached(key, venues, 3600);
