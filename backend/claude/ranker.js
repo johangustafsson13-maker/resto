@@ -51,11 +51,14 @@ Example ranking response:
 }`;
 
 const formatVenueForRanking = (venue) => {
+  // Escape special characters to prevent JSON parsing issues
+  const escape = (str) => (str || '').replace(/"/g, '\\"').replace(/\n/g, ' ').replace(/\r/g, ' ');
+
   return `
 - ID: ${venue.id}
-- Name: ${venue.name}
-- Address: ${venue.address}
-- Cuisine: ${venue.cuisine_tags?.join(', ') || 'N/A'}
+- Name: ${escape(venue.name)}
+- Address: ${escape(venue.address)}
+- Cuisine: ${venue.cuisine_tags?.map(c => escape(c)).join(', ') || 'N/A'}
 - Rating: ${venue.google_rating || 'N/A'}/5 (${venue.review_count || 0} reviews)
 - Price range: ${venue.price_range || 'N/A'}/5
 - Features: ${[
@@ -66,7 +69,7 @@ const formatVenueForRanking = (venue) => {
   ]
     .filter(Boolean)
     .join(', ') || 'standard'}
-- Hours: ${venue.open_hours ? JSON.stringify(venue.open_hours) : 'N/A'}
+- Hours: ${venue.open_hours ? JSON.stringify(venue.open_hours).replace(/"/g, '\\"') : 'N/A'}
 `;
 };
 
