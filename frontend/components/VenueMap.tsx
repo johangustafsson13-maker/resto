@@ -25,7 +25,7 @@ export default function VenueMap({ venues, onVenueSelect }: VenueMapProps) {
     })
 
     // Add markers for venues
-    venues.forEach((venue, index) => {
+    venues.forEach((venue) => {
       const marker = new mapboxgl.Marker({ color: '#F97316' })
         .setLngLat([venue.lng, venue.lat])
         .setPopup(
