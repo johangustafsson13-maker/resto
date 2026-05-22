@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+// @ts-ignore
 import mapboxgl from 'mapbox-gl'
 import type { Venue } from '../types'
 
