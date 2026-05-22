@@ -213,9 +213,10 @@ module.exports = async (req, res, next) => {
     }
 
     const isPaid = quotaUser.subscription_status === 'paid';
-    if (!isPaid && quotaUser.searches_remaining <= 0) {
-      return res.status(403).json({ error: 'Daily search limit reached. Upgrade to premium.' });
-    }
+    // TEMP: Disable quota for MVP testing — will re-enable for production
+    // if (!isPaid && quotaUser.searches_remaining <= 0) {
+    //   return res.status(403).json({ error: 'Daily search limit reached. Upgrade to premium.' });
+    // }
     // ─────────────────────────────────────────────────────────────────────────
 
     // 1. Parse natural language → structured intent
@@ -231,12 +232,13 @@ module.exports = async (req, res, next) => {
     const key = cacheKey(trimmed, intent);
     const cachedVenues = await cache.getCached(key);
     if (cachedVenues) {
-      if (!isPaid) {
-        await db.none(
-          'UPDATE users SET searches_remaining = GREATEST(searches_remaining - 1, 0) WHERE id = $1',
-          [req.user.userId]
-        ).catch(err => console.error('[search] quota decrement failed:', err.message));
-      }
+      // TEMP: Disable quota decrement for MVP testing
+      // if (!isPaid) {
+      //   await db.none(
+      //     'UPDATE users SET searches_remaining = GREATEST(searches_remaining - 1, 0) WHERE id = $1',
+      //     [req.user.userId]
+      //   ).catch(err => console.error('[search] quota decrement failed:', err.message));
+      // }
       return res.json({ query: trimmed, intent, venues: cachedVenues });
     }
 
