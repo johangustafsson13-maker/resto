@@ -7,6 +7,12 @@ const jwt = require('jsonwebtoken');
  * { userId, email } to req.user. Returns 401 if missing or invalid.
  */
 module.exports = (req, res, next) => {
+  // TEMP: relaxed for local dev — Phase 2 will implement proper credential forwarding from frontend API route
+  if (process.env.NODE_ENV === 'development') {
+    req.user = null;
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

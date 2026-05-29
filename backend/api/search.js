@@ -281,39 +281,43 @@ module.exports = async (req, res, next) => {
     const trimmed = query.trim();
     const topN = Math.min(Math.max(parseInt(limit, 10) || 5, 1), 10);
 
-    // ── Quota check ───────────────────────────────────────────────────────────
-    let quotaUser;
-    try {
-      quotaUser = await db.oneOrNone(
-        'SELECT searches_remaining, searches_reset_at, subscription_status FROM users WHERE id = $1',
-        [req.user.userId]
-      );
-    } catch (err) {
-      console.error('[search] quota fetch failed:', err.message);
-      return res.status(500).json({ error: 'Database error' });
-    }
+    // TEMP: relaxed for local dev — Phase 2 will implement proper credential forwarding from frontend API route
+    let isPaid = true; // default in dev: skip quota decrement
+    if (process.env.NODE_ENV !== 'development') {
+      // ── Quota check ─────────────────────────────────────────────────────────
+      let quotaUser;
+      try {
+        quotaUser = await db.oneOrNone(
+          'SELECT searches_remaining, searches_reset_at, subscription_status FROM users WHERE id = $1',
+          [req.user.userId]
+        );
+      } catch (err) {
+        console.error('[search] quota fetch failed:', err.message);
+        return res.status(500).json({ error: 'Database error' });
+      }
 
-    if (!quotaUser) {
-      return res.status(401).json({ error: 'User not found' });
-    }
+      if (!quotaUser) {
+        return res.status(401).json({ error: 'User not found' });
+      }
 
-    // Reset window when the 24-hour period has expired
-    const now = new Date();
-    if (quotaUser.searches_reset_at && quotaUser.searches_reset_at < now) {
-      const nextReset = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      await db.none(
-        'UPDATE users SET searches_remaining = 3, searches_reset_at = $1 WHERE id = $2',
-        [nextReset, req.user.userId]
-      ).catch(err => console.error('[search] quota reset failed:', err.message));
-      quotaUser.searches_remaining = 3;
-    }
+      // Reset window when the 24-hour period has expired
+      const now = new Date();
+      if (quotaUser.searches_reset_at && quotaUser.searches_reset_at < now) {
+        const nextReset = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        await db.none(
+          'UPDATE users SET searches_remaining = 3, searches_reset_at = $1 WHERE id = $2',
+          [nextReset, req.user.userId]
+        ).catch(err => console.error('[search] quota reset failed:', err.message));
+        quotaUser.searches_remaining = 3;
+      }
 
-    const isPaid = quotaUser.subscription_status === 'paid';
-    // TEMP: Disable quota for MVP testing — will re-enable for production
-    // if (!isPaid && quotaUser.searches_remaining <= 0) {
-    //   return res.status(403).json({ error: 'Daily search limit reached. Upgrade to premium.' });
-    // }
-    // ─────────────────────────────────────────────────────────────────────────
+      isPaid = quotaUser.subscription_status === 'paid';
+      // TEMP: Disable quota for MVP testing — will re-enable for production
+      // if (!isPaid && quotaUser.searches_remaining <= 0) {
+      //   return res.status(403).json({ error: 'Daily search limit reached. Upgrade to premium.' });
+      // }
+      // ───────────────────────────────────────────────────────────────────────
+    }
 
     // 1. Parse natural language → structured intent
     let intent;
