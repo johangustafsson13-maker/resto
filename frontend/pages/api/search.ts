@@ -16,7 +16,7 @@ export default async function handler(
 
   try {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
-    const response = await fetch(`${apiUrl}/search`, {
+    const response = await fetch(`${apiUrl}/api/search`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
