@@ -89,7 +89,7 @@ async function parseQueryIntent(query) {
 
 // ─── Step 2: Filter venues from DB ───────────────────────────────────────────
 
-async function fetchCandidates(intent, query) {
+async function fetchCandidates(intent, query, type = 'both', filters = {}) {
   const locationCoords = resolveNeighborhood(intent.location);
   const center = locationCoords || STOCKHOLM_CENTER;
   // Wider radius to ensure we get enough matches for specialty cuisines
@@ -100,22 +100,55 @@ async function fetchCandidates(intent, query) {
   const lngDelta = radiusKm / (111.0 * Math.cos(center.lat * (Math.PI / 180)));
   const maxPrice = budgetToPriceRange(intent.budget);
 
+  // Build type filter using new is_terrace/is_restaurant columns
+  let typeFilter = '';
+  if (type === 'restaurant') {
+    typeFilter = 'AND is_restaurant = true';
+  } else if (type === 'terrace') {
+    typeFilter = 'AND is_terrace = true';
+  }
+  // else: type === 'both' or 'all', no type filter
+
+  // Build additional filters
+  let filterClauses = [];
+  let filterParams = [];
+
+  if (filters.outdoor_seating === true) {
+    filterClauses.push('AND outdoor_seating = true');
+  }
+
+  if (filters.cuisine && Array.isArray(filters.cuisine) && filters.cuisine.length > 0) {
+    // Use array overlap operator for cuisine tags
+    const paramIndex = 6 + filterParams.length;
+    filterClauses.push(`AND cuisine_tags && $${paramIndex}`);
+    filterParams.push(filters.cuisine);
+  }
+
+  const filterSQL = filterClauses.join(' ');
+
+  const params = [
+    center.lat - latDelta, center.lat + latDelta,
+    center.lng - lngDelta, center.lng + lngDelta,
+    maxPrice,
+    ...filterParams,
+  ];
+
   const candidates = await db.any(
     `SELECT id, name, address, lat, lng, cuisine_tags, price_range,
+            is_terrace, is_restaurant, indoor_seating, description,
             google_rating, review_count, phone, website, open_hours,
-            outdoor_seating, kid_friendly, wheelchair_accessible, wifi
+            outdoor_seating, kid_friendly, wheelchair_accessible, wifi,
+            outdoor_seats, orientation, neighbourhood, google_place_id
      FROM venues
      WHERE lat::float BETWEEN $1 AND $2
        AND lng::float BETWEEN $3 AND $4
        AND ($5::int IS NULL OR price_range IS NULL OR price_range <= $5)
+       ${typeFilter}
+       ${filterSQL}
      ORDER BY google_rating::float DESC NULLS LAST,
               review_count DESC NULLS LAST
      LIMIT 80`,
-    [
-      center.lat - latDelta, center.lat + latDelta,
-      center.lng - lngDelta, center.lng + lngDelta,
-      maxPrice,
-    ]
+    params
   );
 
   // Post-process: prioritize by cuisine if specified
@@ -179,38 +212,74 @@ async function rankCandidates(venues, intent, topN) {
 }
 
 function buildResponseVenue(v, explanation = null) {
-  return {
+  const venue = {
     id: v.id,
     name: v.name,
     address: v.address,
     lat: Number(v.lat),
     lng: Number(v.lng),
-    cuisine_tags: v.cuisine_tags,
-    price_range: v.price_range,
     google_rating: v.google_rating != null ? Number(v.google_rating) : null,
     review_count: v.review_count,
-    phone: v.phone,
-    website: v.website,
+    neighbourhood: v.neighbourhood,
+    is_terrace: v.is_terrace || false,
+    is_restaurant: v.is_restaurant !== false,
+    outdoor_seating: v.outdoor_seating || false,
+    indoor_seating: v.indoor_seating !== false,
+    description: v.description,
     explanation,
   };
+
+  // Common fields for both restaurants and terraces
+  venue.cuisine_tags = v.cuisine_tags;
+  venue.price_range = v.price_range;
+  venue.phone = v.phone;
+  venue.website = v.website;
+  venue.kid_friendly = v.kid_friendly;
+  venue.wheelchair_accessible = v.wheelchair_accessible;
+  venue.wifi = v.wifi;
+
+  // Terrace-specific fields
+  if (v.is_terrace) {
+    venue.outdoor_seats = v.outdoor_seats;
+    venue.orientation = v.orientation;
+  }
+
+  return venue;
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 /**
  * POST /api/search
- * Body: { query: string, limit?: number (max 5) }
+ * Body: {
+ *   query: string,
+ *   type?: 'restaurant' | 'terrace' | 'both' (default: 'both'),
+ *   limit?: number (max 10, default 5),
+ *   filters?: {
+ *     outdoor_seating?: boolean,
+ *     price_max?: 1-5,
+ *     cuisine?: string[],
+ *     sunshine?: boolean
+ *   },
+ *   lat?: number,
+ *   lng?: number
+ * }
  */
 module.exports = async (req, res, next) => {
   try {
-    const { query, limit = 5 } = req.body;
+    const { query, limit = 5, type = 'both', filters = {}, lat, lng } = req.body;
 
     if (!query || typeof query !== 'string' || !query.trim()) {
       return res.status(400).json({ error: 'query is required' });
     }
 
+    // Validate type parameter
+    if (!['restaurant', 'terrace', 'both', 'all'].includes(type)) {
+      return res.status(400).json({ error: 'type must be "restaurant", "terrace", "both", or "all"' });
+    }
+
     const trimmed = query.trim();
-    const topN = Math.min(Math.max(parseInt(limit, 10) || 5, 1), 5);
+    const topN = Math.min(Math.max(parseInt(limit, 10) || 5, 1), 10);
 
     // ── Quota check ───────────────────────────────────────────────────────────
     let quotaUser;
@@ -268,13 +337,13 @@ module.exports = async (req, res, next) => {
       //     [req.user.userId]
       //   ).catch(err => console.error('[search] quota decrement failed:', err.message));
       // }
-      return res.json({ query: trimmed, intent, venues: cachedVenues });
+      return res.json({ query: trimmed, type, intent, venues: cachedVenues });
     }
 
     // 2. Filter candidates from database
     let candidates;
     try {
-      candidates = await fetchCandidates(intent, trimmed);
+      candidates = await fetchCandidates(intent, trimmed, type, filters);
     } catch (err) {
       console.error('[search] db query failed:', err.message);
       return res.status(500).json({ error: 'Database error' });
@@ -334,7 +403,13 @@ module.exports = async (req, res, next) => {
       ).catch(err => console.error('[search] quota decrement failed:', err.message));
     }
 
-    return res.json({ query: trimmed, intent, venues });
+    return res.json({
+      query: trimmed,
+      type,
+      intent,
+      venues,
+      total: venues.length,
+    });
 
   } catch (error) {
     next(error);
