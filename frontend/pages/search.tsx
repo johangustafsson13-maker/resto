@@ -47,22 +47,14 @@ export default function SearchPage() {
     setHeaderQuery(searchQuery)
   }, [searchQuery])
 
-  // SCREENSHOT MOCK — remove before commit
-  useEffect(() => {
-    const MOCK: Venue[] = [
-      { id: 1, name: 'Café Saturnus', address: 'Eriksbergsgatan 6, Östermalm', lat: 59.337, lng: 18.073, is_terrace: true, is_restaurant: false, outdoor_seating: true, indoor_seating: true, google_rating: 4.5, cuisine_tags: ['Swedish', 'Brunch'], website: 'https://cafesaturnus.se' },
-      { id: 2, name: 'Pelikan', address: 'Blekingegatan 40, Södermalm', lat: 59.315, lng: 18.071, is_terrace: false, is_restaurant: true, outdoor_seating: false, indoor_seating: true, google_rating: 4.2, price_range: 2, cuisine_tags: ['Swedish', 'Traditional'] },
-      { id: 3, name: 'Terrassen Mosebacke', address: 'Mosebacke Torg 3, Södermalm', lat: 59.318, lng: 18.072, is_terrace: true, is_restaurant: true, outdoor_seating: true, indoor_seating: true, google_rating: 4.0, price_range: 2, cuisine_tags: ['Bar', 'Swedish'] },
-    ]
-    setVenues(MOCK)
-    setSelectedVenue(MOCK[0])
-    setShadowStatus({ '1': false, '2': null, '3': true })
-  }, [])
-
   // Fetch when query changes; no-query = clear results, no API call
   useEffect(() => {
+    if (!router.isReady) return
     if (!searchQuery) {
-      return // Keep mock data for screenshots
+      setVenues([])
+      setSelectedVenue(null)
+      setShadowStatus({})
+      return
     }
     const fetchResults = async () => {
       setLoading(true)
@@ -75,7 +67,7 @@ export default function SearchPage() {
         })
         if (!response.ok) throw new Error('Search failed')
         const data = await response.json()
-        setVenues(data.results || [])
+        setVenues(data.venues || [])
         setSelectedVenue(null)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Search failed')
@@ -85,7 +77,7 @@ export default function SearchPage() {
       }
     }
     fetchResults()
-  }, [searchQuery])
+  }, [router.isReady, searchQuery])
 
   // --- URL writer: shallow push so filter changes don't re-trigger fetch ---
   const updateQuery = (updates: Partial<Record<'q' | 'type' | 'sun' | 'view', string>>) => {
