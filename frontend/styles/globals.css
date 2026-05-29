@@ -22,8 +22,22 @@ code {
     monospace;
 }
 
+/* Placeholder text — mirrors COLORS.text3 from lib/theme.ts */
+input::placeholder,
+textarea::placeholder {
+  color: #6b6b6b;
+  opacity: 1;
+}
+
 /* Mapbox styling */
 .mapboxgl-popup-content {
   padding: 10px;
   border-radius: 8px;
+}
+
+/* Responsive grid for mobile */
+@media (max-width: 768px) {
+  .mobile-single-column {
+    grid-template-columns: 1fr !important;
+  }
 }

@@ -3,21 +3,22 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { signup, isAuthenticated } from '../../lib/auth'
+import { COLORS } from '../../lib/theme'
 
 export default function SignUpPage() {
   const router = useRouter()
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState('')
-  const [success, setSuccess]   = useState(false)
+  const [email, setEmail]           = useState('')
+  const [password, setPassword]     = useState('')
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState('')
+  const [success, setSuccess]       = useState(false)
+  const [emailFocused, setEmailFocused] = useState(false)
+  const [passwordFocused, setPasswordFocused] = useState(false)
 
-  // Redirect already-authenticated users
   useEffect(() => {
     if (isAuthenticated()) router.replace('/')
   }, [router])
 
-  // Auto-clear error after 5 s
   useEffect(() => {
     if (!error) return
     const t = setTimeout(() => setError(''), 5000)
@@ -47,6 +48,8 @@ export default function SignUpPage() {
     }
   }
 
+  const canSubmit = !loading && !!email && !!password
+
   return (
     <>
       <Head>
@@ -54,77 +57,81 @@ export default function SignUpPage() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="w-full max-w-md">
+      <main style={{ minHeight: '100vh', backgroundColor: COLORS.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+        <div style={{ width: '100%', maxWidth: '420px' }}>
 
           {/* Brand */}
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Resto</h1>
-            <p className="mt-1 text-gray-500">AI restaurant discovery in Stockholm</p>
+          <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+            <h1 style={{ fontSize: '36px', fontWeight: 700, color: COLORS.text1, margin: 0, fontFamily: 'Georgia, serif' }}>RESTO</h1>
+            <p style={{ marginTop: '0.5rem', color: COLORS.text2, fontSize: '14px' }}>AI restaurant discovery in Stockholm</p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Create Account</h2>
+          <div style={{ backgroundColor: COLORS.surface1, border: `1px solid ${COLORS.border}`, padding: '2rem' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 700, color: COLORS.text1, marginBottom: '1.5rem' }}>Create Account</h2>
 
             {success ? (
-              <div className="text-center py-6">
-                <p className="text-green-600 font-semibold text-lg">
+              <div style={{ textAlign: 'center', paddingTop: '1.5rem', paddingBottom: '1.5rem' }}>
+                <p style={{ color: '#22c55e', fontWeight: 600, fontSize: '16px' }}>
                   Welcome! You get 3 free searches.
                 </p>
-                <p className="mt-2 text-gray-500 text-sm">Redirecting…</p>
+                <p style={{ marginTop: '0.5rem', color: COLORS.text2, fontSize: '13px' }}>Redirecting…</p>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} noValidate className="space-y-4">
+              <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {error && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  <div style={{ backgroundColor: COLORS.surface2, border: `1px solid ${COLORS.accent}`, color: COLORS.text1, padding: '1rem', fontSize: '13px' }}>
                     {error}
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: COLORS.text2, marginBottom: '0.5rem' }}>
                     Email
                   </label>
                   <input
                     type="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
+                    onFocus={() => setEmailFocused(true)}
+                    onBlur={() => setEmailFocused(false)}
                     required
                     autoComplete="email"
                     placeholder="you@example.com"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    style={{ width: '100%', padding: '0.75rem 1rem', border: `1px solid ${emailFocused ? COLORS.accent : COLORS.border}`, borderRadius: '0', backgroundColor: COLORS.surface2, fontSize: '14px', color: COLORS.text1, boxSizing: 'border-box', outline: 'none', transition: 'border-color 0.2s' }}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: COLORS.text2, marginBottom: '0.5rem' }}>
                     Password
                   </label>
                   <input
                     type="password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
+                    onFocus={() => setPasswordFocused(true)}
+                    onBlur={() => setPasswordFocused(false)}
                     required
                     minLength={6}
                     autoComplete="new-password"
                     placeholder="At least 6 characters"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    style={{ width: '100%', padding: '0.75rem 1rem', border: `1px solid ${passwordFocused ? COLORS.accent : COLORS.border}`, borderRadius: '0', backgroundColor: COLORS.surface2, fontSize: '14px', color: COLORS.text1, boxSizing: 'border-box', outline: 'none', transition: 'border-color 0.2s' }}
                   />
                 </div>
 
                 <button
                   type="submit"
-                  disabled={loading || !email || !password}
-                  className="w-full py-3 bg-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  disabled={!canSubmit}
+                  style={{ width: '100%', padding: '0.75rem 1rem', backgroundColor: canSubmit ? COLORS.accent : COLORS.surface2, color: canSubmit ? COLORS.bg : COLORS.text3, border: 'none', borderRadius: '0', fontSize: '13px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: canSubmit ? 'pointer' : 'not-allowed', transition: 'background-color 0.2s' }}
                 >
                   {loading ? 'Creating account…' : 'Sign Up'}
                 </button>
               </form>
             )}
 
-            <p className="mt-6 text-center text-sm text-gray-600">
+            <p style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '13px', color: COLORS.text2 }}>
               Already have an account?{' '}
-              <Link href="/auth/login" className="text-orange-500 hover:text-orange-600 font-medium">
+              <Link href="/auth/login" style={{ color: COLORS.accent, textDecoration: 'none', fontWeight: 600 }}>
                 Log in
               </Link>
             </p>
