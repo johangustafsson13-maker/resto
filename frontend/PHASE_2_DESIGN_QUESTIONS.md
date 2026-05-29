@@ -21,5 +21,10 @@ Re-enable both and clean up the unused-variable warnings they surface.
 ## 5. Typography polish + micro-interactions
 Per REDESIGN_STRATEGY.md Phase 2 scope. Wait until Phase 1 ships to a preview environment and is used in real conditions for a few days before deciding what actually needs polish.
 
+## 6. Frontend → backend auth forwarding
+Current state: backend /api/search requires a JWT Bearer token; frontend API route (pages/api/search.ts) doesn't forward credentials.
+Dev-only auth bypass was added in phase1(c9.6) to unblock Phase 1 verification: middleware/auth.js skips the JWT check when NODE_ENV=development, and api/search.js skips the quota block.
+Phase 2 must: design credential forwarding (forward user session token from cookie/localStorage through pages/api/search.ts to backend), remove the dev bypass in both middleware/auth.js and api/search.js, and verify auth gating works correctly end-to-end.
+
 ## Process note
-Address items 1 and 2 first — those are real architectural questions deferred from Phase 1. Items 3-5 are polish; let real usage inform priority.
+Address items 1, 2, and 6 first — those are real architectural questions deferred from Phase 1. Items 3-5 are polish; let real usage inform priority.
