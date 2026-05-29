@@ -17,6 +17,11 @@ export const COLORS = {
   sunny:      '#fbbf24',  // venues in sun right now
   shaded:     '#6b7280',  // shaded venues
   restaurant: '#f97316',  // indoor / restaurant-only venues
+
+  // Map shadow overlay — cool blue-gray tint on occluded areas on dark basemap.
+  // Opacity is baked into the rgba so tuning is a single value change here.
+  // Phase 2 decision pending: consider inverting to warm glow on sunny areas instead.
+  shadowOverlay: 'rgba(120, 140, 180, 0.35)',
 } as const
 
 export type ColorKey = keyof typeof COLORS
