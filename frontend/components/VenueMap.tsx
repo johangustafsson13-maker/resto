@@ -326,6 +326,11 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
 
       // Add ground shadows layer (2D only - clean, no double shadows)
       // Overlay color tuned for dark-v11 basemap — see COLORS.shadowOverlay in theme.ts
+      // TODO(phase2): Consider inverting metaphor — warm glow on sunny areas instead of cool
+      // tint on shadowed areas. Product is "find sun," not "find shadow." The current approach
+      // tints occluded areas (cartographic convention) but the product story argues for
+      // highlighting lit areas with COLORS.sunny. Changing this requires reworking generateShadowFeatures
+      // to instead mark sun-exposed polygons.
       map.addLayer({
         id: 'ground-shadows',
         type: 'fill',
