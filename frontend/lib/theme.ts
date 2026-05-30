@@ -1,27 +1,22 @@
 export const COLORS = {
   // Backgrounds
-  bg:       '#0a0a0a',
-  surface1: '#141414',  // cards, panels
-  surface2: '#1f1f1f',  // hover, raised states
-  border:   '#2a2a2a',
+  bg:       '#f4f1ea',  // warm cream base
+  surface1: '#ffffff',  // cards, panels
+  surface2: '#ebe6dc',  // raised, hover, inputs
+  border:   '#1a1a1a',  // heavy ink — brutalist outlines
 
   // Text
-  text1: '#f5f5f5',
-  text2: '#a1a1a1',  // secondary
-  text3: '#6b6b6b',  // tertiary
+  text1: '#0a0a0a',  // near-black ink
+  text2: '#4a4a4a',  // secondary
+  text3: '#8a8a8a',  // tertiary
 
-  // Accent — use sparingly: focus rings, selected states, key metrics, CTA
-  accent: '#e8b04b',
+  // Accent — primary CTAs, active states. NOT decorative. NOT map-layer.
+  accent: '#d92816',  // saturated punk red
 
-  // Status — data colors, not decorative
-  sunny:      '#fbbf24',  // venues in sun right now
-  shaded:     '#6b7280',  // shaded venues
-  restaurant: '#f97316',  // indoor / restaurant-only venues
-
-  // Map shadow overlay — cool blue-gray tint on occluded areas on dark basemap.
-  // Opacity is baked into the rgba so tuning is a single value change here.
-  // Phase 2 decision pending: consider inverting to warm glow on sunny areas instead.
-  shadowOverlay: 'rgba(120, 140, 180, 0.35)',
+  // Map-only — NEVER use outside the map layer.
+  // sunOnMap is reserved for the sun overlay (Phase 2, item 1).
+  sunOnMap:   '#fbbf24',                    // warm gold, sun-lit areas
+  shadeOnMap: 'rgba(110, 130, 165, 0.25)', // cool desaturated, shadowed areas
 } as const
 
 export type ColorKey = keyof typeof COLORS
