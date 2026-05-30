@@ -253,7 +253,7 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
 
     const map = new mapboxgl.Map({
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: 'mapbox://styles/mapbox/light-v11',
       center: [18.0686, 59.3293], // Central Stockholm
       zoom: 12,
     })
@@ -336,7 +336,7 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
         type: 'fill',
         source: 'shadow-source',
         paint: {
-          'fill-color': COLORS.shadowOverlay, // opacity baked into rgba; fill-opacity must be 1
+          'fill-color': COLORS.shadeOnMap, // opacity baked into rgba; fill-opacity must be 1
           'fill-opacity': 1,
           'fill-antialias': true,
         },
