@@ -26,14 +26,29 @@ Current state: backend /api/search requires a JWT Bearer token; frontend API rou
 Dev-only auth bypass was added in phase1(c9.6) to unblock Phase 1 verification: middleware/auth.js skips the JWT check when NODE_ENV=development, and api/search.js skips the quota block.
 Phase 2 must: design credential forwarding (forward user session token from cookie/localStorage through pages/api/search.ts to backend), remove the dev bypass in both middleware/auth.js and api/search.js, and verify auth gating works correctly end-to-end.
 
-## 7. Pre-existing render loop in search.tsx (fixed in design-pass-v1 A3.5)
-handleShadowStatusChange and handleVenueSelect were recreated each render (no useCallback),
-and filteredVenues was recomputed each render (no useMemo). Together these caused VenueMap's
-[venues, onVenueSelect, onShadowStatusChange] effect to re-fire on every shadow status report,
-continuously calling addMarkers → fitBounds, which locked the map zoom and prevented user zoom.
-Fixed in A3.5: wrapped both handlers in useCallback([]) and filteredVenues in useMemo.
+## 7. Pre-existing render loop in search.tsx (fixed in design-pass-v1 A3.5 + A3.6)
+The bug had TWO independent causes — both are required to be fixed together.
+
+Cause 1 (A3.5): handleShadowStatusChange and handleVenueSelect were recreated each render
+(no useCallback), and filteredVenues was recomputed each render (no useMemo). This made
+VenueMap's [venues, onVenueSelect, onShadowStatusChange] effect dependency array unstable
+on every parent render.
+
+Cause 2 (A3.6): Even with stable callback refs and useMemo, setShadowStatus was called with
+a new object on every addMarkers cycle ({...prev, [venueId]: result} always creates a new
+reference). This busted the filteredVenues useMemo even when shadow values were unchanged,
+producing a new filteredVenues array, triggering VenueMap's effect, registering a new
+map.once('idle', addMarkers), which fired after the next fitBounds animation — infinite loop.
+
+Fix: setShadowStatus returns prev unchanged when value hasn't changed (identity guard).
+Defensive: map.off('idle', addMarkers) before map.once('idle', addMarkers) in VenueMap.
+
+Warning: If you see only the useCallback/useMemo fix (A3.5) and think it's sufficient —
+it is not. The setShadowStatus identity guard (A3.6) is equally necessary. Without it,
+the loop reasserts via filteredVenues reference churn.
+
 Investigate other components for the same pattern — any inline function passed as a prop to a
-component with a useEffect dependency array is a candidate.
+component with a useEffect dependency array is a candidate for both issues.
 
 ## Process note
 Address items 1, 2, and 6 first — those are real architectural questions deferred from Phase 1. Items 3-5 are polish; let real usage inform priority.

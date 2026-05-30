@@ -108,7 +108,10 @@ export default function SearchPage() {
   }, [])
 
   const handleShadowStatusChange = useCallback((venueId: string, shadowed: boolean | null) => {
-    setShadowStatus((prev) => ({ ...prev, [venueId]: shadowed }))
+    setShadowStatus((prev) => {
+      if (prev[venueId] === shadowed) return prev
+      return { ...prev, [venueId]: shadowed }
+    })
   }, [])
 
   // Empty state copy when no query

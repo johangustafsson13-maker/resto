@@ -537,16 +537,7 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
   // Update markers whenever venues change
   useEffect(() => {
     const map = mapRef.current
-    if (!map) {
-      if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
-        console.log('[Shadow Status] Map not ready')
-      }
-      return
-    }
-
-    if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
-      console.log(`[Shadow Status] Map ready, venues: ${venues.length}`)
-    }
+    if (!map) return
 
     markersRef.current.forEach(m => m.remove())
     markersRef.current = []
@@ -554,10 +545,6 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
     if (!venues.length) return
 
     function addMarkers() {
-      if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
-        console.log(`[Shadow Status] Starting to add ${venues.length} markers...`)
-      }
-
       // Guard: skip venues with missing/invalid coordinates — prevents NaN crash in fitBounds/Marker
       const hasValidCoords = (v: Venue) => v.lat != null && v.lng != null && !isNaN(v.lat) && !isNaN(v.lng)
 
@@ -567,26 +554,15 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
         let color: string
         let shadowResult: boolean | null = null
 
-        // Determine color based on venue type and sun status
         if (venue.is_terrace || venue.outdoor_seating) {
-          // Terraces and outdoor-seating restaurants: use sun-based color
           const score = getSunScore(venue.lat, venue.lng)
           shadowResult = isInShadow(map, venue.lat, venue.lng)
           const shadowed = shadowResult !== null ? shadowResult : score === 0
           color = markerColor(score, shadowed)
-
-          if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
-            console.log(`[Shadow Status] ${venue.name} (terrace): shadowResult=${shadowResult}, shadowed=${shadowed}`)
-          }
         } else {
-          // Indoor restaurants: use orange color
-          color = '#f97316' // orange
-          if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
-            console.log(`[Shadow Status] ${venue.name} (restaurant): using orange`)
-          }
+          color = '#f97316'
         }
 
-        // Report shadow status back to parent
         onShadowStatusChange?.(String(venue.id), shadowResult)
 
         const el = document.createElement('div')
@@ -626,6 +602,7 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
     if (map.loaded()) {
       addMarkers()
     } else {
+      map.off('idle', addMarkers) // defensive: clear any pending listener from a previous cycle
       map.once('idle', addMarkers)
     }
 
