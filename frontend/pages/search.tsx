@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/router'
 import VenueMap, { VenueMapHandle } from '../components/VenueMap'
 import FilterPanel from '../components/FilterPanel'
@@ -89,22 +89,27 @@ export default function SearchPage() {
   }
 
   // --- Derived ---
-  const filteredVenues = venues.filter((venue) => {
+  // useMemo: filteredVenues must have a stable reference. Without it, .filter() returns
+  // a new array every render, which changes the `venues` prop to VenueMap on every
+  // render, re-firing the markers/fitBounds effect even when data hasn't changed.
+  const filteredVenues = useMemo(() => venues.filter((venue) => {
     if (venueType === 'restaurant' && !venue.is_restaurant) return false
     if (venueType === 'terrace' && !venue.is_terrace) return false
     if (sunFilter === 'sunny' && shadowStatus[String(venue.id)] === true) return false
     if (sunFilter === 'shaded' && shadowStatus[String(venue.id)] === false) return false
     return true
-  })
+  }), [venues, venueType, sunFilter, shadowStatus])
 
-  const handleVenueSelect = (venue: Venue) => {
+  // useCallback: stable refs so VenueMap's dependency array doesn't see changes
+  // on every parent render, which would re-fire addMarkers → fitBounds → zoom reset.
+  const handleVenueSelect = useCallback((venue: Venue) => {
     setSelectedVenue(venue)
     mapRef.current?.flyTo(venue.lat, venue.lng)
-  }
+  }, [])
 
-  const handleShadowStatusChange = (venueId: string, shadowed: boolean | null) => {
+  const handleShadowStatusChange = useCallback((venueId: string, shadowed: boolean | null) => {
     setShadowStatus((prev) => ({ ...prev, [venueId]: shadowed }))
-  }
+  }, [])
 
   // Empty state copy when no query
   const hasActiveFilters = venueType !== 'both' || sunFilter !== 'any'

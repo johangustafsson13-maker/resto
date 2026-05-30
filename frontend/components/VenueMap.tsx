@@ -557,7 +557,13 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
       if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
         console.log(`[Shadow Status] Starting to add ${venues.length} markers...`)
       }
+
+      // Guard: skip venues with missing/invalid coordinates — prevents NaN crash in fitBounds/Marker
+      const hasValidCoords = (v: Venue) => v.lat != null && v.lng != null && !isNaN(v.lat) && !isNaN(v.lng)
+
       venues.forEach((venue) => {
+        if (!hasValidCoords(venue)) return
+
         let color: string
         let shadowResult: boolean | null = null
 
@@ -604,15 +610,16 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
         markersRef.current.push(marker)
       })
 
-      // Fit map to show all venues
-      if (venues.length > 1) {
-        const bounds = venues.reduce(
+      // Fit map to show all venues (valid coords only)
+      const validVenues = venues.filter(hasValidCoords)
+      if (validVenues.length > 1) {
+        const bounds = validVenues.reduce(
           (b: any, v: Venue) => b.extend([v.lng, v.lat] as [number, number]),
-          new mapboxgl.LngLatBounds([venues[0].lng, venues[0].lat], [venues[0].lng, venues[0].lat])
+          new mapboxgl.LngLatBounds([validVenues[0].lng, validVenues[0].lat], [validVenues[0].lng, validVenues[0].lat])
         )
         map.fitBounds(bounds, { padding: 80, maxZoom: 15, animate: true })
-      } else if (venues.length === 1) {
-        map.flyTo({ center: [venues[0].lng, venues[0].lat], zoom: 15 })
+      } else if (validVenues.length === 1) {
+        map.flyTo({ center: [validVenues[0].lng, validVenues[0].lat], zoom: 15 })
       }
     }
 

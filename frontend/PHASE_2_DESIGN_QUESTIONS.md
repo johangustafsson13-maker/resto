@@ -26,5 +26,14 @@ Current state: backend /api/search requires a JWT Bearer token; frontend API rou
 Dev-only auth bypass was added in phase1(c9.6) to unblock Phase 1 verification: middleware/auth.js skips the JWT check when NODE_ENV=development, and api/search.js skips the quota block.
 Phase 2 must: design credential forwarding (forward user session token from cookie/localStorage through pages/api/search.ts to backend), remove the dev bypass in both middleware/auth.js and api/search.js, and verify auth gating works correctly end-to-end.
 
+## 7. Pre-existing render loop in search.tsx (fixed in design-pass-v1 A3.5)
+handleShadowStatusChange and handleVenueSelect were recreated each render (no useCallback),
+and filteredVenues was recomputed each render (no useMemo). Together these caused VenueMap's
+[venues, onVenueSelect, onShadowStatusChange] effect to re-fire on every shadow status report,
+continuously calling addMarkers → fitBounds, which locked the map zoom and prevented user zoom.
+Fixed in A3.5: wrapped both handlers in useCallback([]) and filteredVenues in useMemo.
+Investigate other components for the same pattern — any inline function passed as a prop to a
+component with a useEffect dependency array is a candidate.
+
 ## Process note
 Address items 1, 2, and 6 first — those are real architectural questions deferred from Phase 1. Items 3-5 are polish; let real usage inform priority.
