@@ -1,9 +1,22 @@
 # Phase 2 — Design Questions & Deferred Items
 
-## 1. Shadow visualization metaphor on dark basemap
-Phase 1 (C9.5) chose Option 1: cool blue-gray overlay rgba(120, 140, 180, 0.35) on dark-v11 basemap.
-Open question: invert metaphor to render warm-glow on SUN-LIT areas instead of cool-tint on shaded areas.
-The product is "find sun," not "find shadow." Worth prototyping on a branch and comparing visually.
+## 1. Shadow visualization — color and rendering depth (updated in design-pass-v1 A3.7)
+design-pass-v1 switched to light-v11 basemap with shadeOnMap rgba(110, 130, 165, 0.25).
+
+COLOR: Verified correct in A3.7 diagnostic. The cool blue-gray reads clearly against cream
+streets. No opacity change needed.
+
+RENDERING DEPTH (new issue): Shadow polygons currently extend across entire block areas,
+including other buildings' footprints — because the difference operation only subtracts the
+*source* building, not all occluding buildings. At late-afternoon sun angles (long shadows),
+this makes the whole visible area appear uniformly gray rather than showing precise
+street-level shadow geometry. Fix: in generateShadowFeatures, subtract ALL building footprints
+(not just the source building) from each shadow polygon. This is a significant perf/geometry
+change — evaluate whether turf.difference iteration over all buildings is feasible, or whether
+a GPU-side approach (masking with a buildings layer) is more appropriate.
+
+Original question (invert metaphor to warm-glow on sunny areas) still deferred. Warm-glow
+sunOnMap layer is Phase 2 item 1 per the original design brief.
 
 ## 2. Backend browse endpoint (no-query filtered browse)
 Phase 1 (C10) chose: no API call when ?q= is absent, show prompt with example queries.
