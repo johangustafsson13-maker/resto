@@ -21,6 +21,11 @@ export const COLORS = {
 
 export type ColorKey = keyof typeof COLORS
 
+export const FONTS = {
+  display: "'Departure Mono', ui-monospace, 'SF Mono', monospace",
+  body:    "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+} as const
+
 export const BREAKPOINTS = {
   mobile: 768,
 } as const
