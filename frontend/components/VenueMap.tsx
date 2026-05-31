@@ -230,7 +230,6 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
     const mapContainer = useRef<HTMLDivElement>(null)
     const mapRef = useRef<any>(null)
     const markersRef = useRef<any[]>([])
-    const [is3D, setIs3D] = useState(false)
 
     // Expose flyTo method via ref
     useImperativeHandle(ref, () => ({
@@ -366,164 +365,13 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
         }
       }, 15000)
 
-      // Add map controls (zoom, 2D/3D toggle, tilt)
-      const controlsDiv = document.createElement('div')
-      controlsDiv.style.cssText = `
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        z-index: 10;
-      `
-
-      // Zoom controls
-      const zoomDiv = document.createElement('div')
-      zoomDiv.style.cssText = `
-        background: white;
-        border-radius: 4px;
-        box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
-        display: flex;
-        flex-direction: column;
-      `
-
-      const zoomInBtn = document.createElement('button')
-      zoomInBtn.innerHTML = '+'
-      zoomInBtn.style.cssText = `
-        width: 36px;
-        height: 36px;
-        border: none;
-        background: white;
-        cursor: pointer;
-        font-size: 20px;
-        font-weight: bold;
-        color: #333;
-        border-bottom: 1px solid #e0e0e0;
-        transition: background 0.2s;
-      `
-      zoomInBtn.onmouseover = () => zoomInBtn.style.background = '#f5f5f5'
-      zoomInBtn.onmouseout = () => zoomInBtn.style.background = 'white'
-      zoomInBtn.onclick = () => map.zoomIn()
-
-      const zoomOutBtn = document.createElement('button')
-      zoomOutBtn.innerHTML = '−'
-      zoomOutBtn.style.cssText = `
-        width: 36px;
-        height: 36px;
-        border: none;
-        background: white;
-        cursor: pointer;
-        font-size: 20px;
-        font-weight: bold;
-        color: #333;
-        transition: background 0.2s;
-      `
-      zoomOutBtn.onmouseover = () => zoomOutBtn.style.background = '#f5f5f5'
-      zoomOutBtn.onmouseout = () => zoomOutBtn.style.background = 'white'
-      zoomOutBtn.onclick = () => map.zoomOut()
-
-      zoomDiv.appendChild(zoomInBtn)
-      zoomDiv.appendChild(zoomOutBtn)
-
-      // 2D/3D toggle
-      const toggle3DBtn = document.createElement('button')
-      toggle3DBtn.innerHTML = '3D'
-      toggle3DBtn.style.cssText = `
-        width: 36px;
-        height: 36px;
-        border: none;
-        background: white;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: bold;
-        color: #333;
-        border-radius: 4px;
-        box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
-        transition: all 0.2s;
-      `
-      toggle3DBtn.onclick = () => {
-        setIs3D(!is3D)
-        if (is3D) {
-          // Switch to 2D
-          map.setPitch(0)
-          toggle3DBtn.style.background = 'white'
-          toggle3DBtn.style.color = '#333'
-          tiltControlsDiv.style.display = 'none'
-        } else {
-          // Switch to 3D
-          map.setPitch(45)
-          toggle3DBtn.style.background = '#333'
-          toggle3DBtn.style.color = 'white'
-          tiltControlsDiv.style.display = 'flex'
-        }
-      }
-
-      // Tilt controls (for 3D mode)
-      const tiltControlsDiv = document.createElement('div')
-      tiltControlsDiv.style.cssText = `
-        background: white;
-        border-radius: 4px;
-        box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
-        display: none;
-        flex-direction: column;
-        overflow: hidden;
-      `
-
-      const tiltUpBtn = document.createElement('button')
-      tiltUpBtn.innerHTML = '▲'
-      tiltUpBtn.style.cssText = `
-        width: 36px;
-        height: 36px;
-        border: none;
-        background: white;
-        cursor: pointer;
-        font-size: 16px;
-        color: #333;
-        border-bottom: 1px solid #e0e0e0;
-        transition: background 0.2s;
-      `
-      tiltUpBtn.onmouseover = () => tiltUpBtn.style.background = '#f5f5f5'
-      tiltUpBtn.onmouseout = () => tiltUpBtn.style.background = 'white'
-      tiltUpBtn.onclick = () => {
-        const currentPitch = map.getPitch()
-        map.setPitch(Math.min(60, currentPitch + 5))
-      }
-
-      const tiltDownBtn = document.createElement('button')
-      tiltDownBtn.innerHTML = '▼'
-      tiltDownBtn.style.cssText = `
-        width: 36px;
-        height: 36px;
-        border: none;
-        background: white;
-        cursor: pointer;
-        font-size: 16px;
-        color: #333;
-        transition: background 0.2s;
-      `
-      tiltDownBtn.onmouseover = () => tiltDownBtn.style.background = '#f5f5f5'
-      tiltDownBtn.onmouseout = () => tiltDownBtn.style.background = 'white'
-      tiltDownBtn.onclick = () => {
-        const currentPitch = map.getPitch()
-        map.setPitch(Math.max(0, currentPitch - 5))
-      }
-
-      tiltControlsDiv.appendChild(tiltUpBtn)
-      tiltControlsDiv.appendChild(tiltDownBtn)
-
-      controlsDiv.appendChild(zoomDiv)
-      controlsDiv.appendChild(toggle3DBtn)
-      controlsDiv.appendChild(tiltControlsDiv)
-
-      const mapCanvas = map.getCanvas()
-      mapCanvas.parentNode?.appendChild(controlsDiv)
+      // A5: custom map controls (zoom +/−, 3D toggle) removed — not part of Pass A design.
+      // Map zoom via scroll wheel / pinch. Pass B may add a styled controls component.
 
       // Clean up interval on map remove
       const originalRemove = map.remove.bind(map)
       map.remove = function() {
         clearInterval(shadowInterval)
-        controlsDiv.remove()
         originalRemove()
       }
     })

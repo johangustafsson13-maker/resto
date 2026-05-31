@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/router'
 import VenueMap, { VenueMapHandle } from '../components/VenueMap'
-import FilterPanel from '../components/FilterPanel'
-import ResultsList from '../components/ResultsList'
-import ViewToggle from '../components/ViewToggle'
+// A5: FilterPanel, ResultsList, ViewToggle hidden — restored and restyled in Pass B
+// import FilterPanel from '../components/FilterPanel'
+// import ResultsList from '../components/ResultsList'
+// import ViewToggle from '../components/ViewToggle'
+import SunCalc from 'suncalc'
 import { COLORS, FONTS, BREAKPOINTS } from '../lib/theme'
 import type { Venue } from '../types'
 
@@ -25,7 +27,7 @@ export default function SearchPage() {
     : 'any')
   const viewMode = router.query.view === 'list' ? 'list' : 'map' as 'map' | 'list'
 
-  // --- Component state (ephemeral, not URL) ---
+  // --- Component state ---
   const [venues, setVenues] = useState<Venue[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -34,6 +36,7 @@ export default function SearchPage() {
   const [isMobile, setIsMobile] = useState(false)
   const [headerQuery, setHeaderQuery] = useState(searchQuery)
   const [headerInputFocused, setHeaderInputFocused] = useState(false)
+  const [sunsetTime, setSunsetTime] = useState('')
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < BREAKPOINTS.mobile)
@@ -47,6 +50,23 @@ export default function SearchPage() {
     setHeaderQuery(searchQuery)
   }, [searchQuery])
 
+  // Compute Stockholm sunset time; refresh every 60 seconds
+  useEffect(() => {
+    const compute = () => {
+      const times = SunCalc.getTimes(new Date(), 59.3293, 18.0686)
+      const s = times.sunset
+      if (!isNaN(s.getTime())) {
+        setSunsetTime(
+          s.getHours().toString().padStart(2, '0') + ':' +
+          s.getMinutes().toString().padStart(2, '0')
+        )
+      }
+    }
+    compute()
+    const id = setInterval(compute, 60000)
+    return () => clearInterval(id)
+  }, [])
+
   // Fetch when query changes; no-query = clear results, no API call
   useEffect(() => {
     if (!router.isReady) return
@@ -56,17 +76,17 @@ export default function SearchPage() {
       setShadowStatus({})
       return
     }
-    const fetchResults = async () => {
+    const run = async () => {
       setLoading(true)
       setError(null)
       try {
-        const response = await fetch('/api/search', {
+        const res = await fetch('/api/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: searchQuery }),
         })
-        if (!response.ok) throw new Error('Search failed')
-        const data = await response.json()
+        if (!res.ok) throw new Error('Search failed')
+        const data = await res.json()
         setVenues(data.venues || [])
         setSelectedVenue(null)
       } catch (err) {
@@ -76,7 +96,7 @@ export default function SearchPage() {
         setLoading(false)
       }
     }
-    fetchResults()
+    run()
   }, [router.isReady, searchQuery])
 
   // --- URL writer: shallow push so filter changes don't re-trigger fetch ---
@@ -88,10 +108,7 @@ export default function SearchPage() {
     )
   }
 
-  // --- Derived ---
-  // useMemo: filteredVenues must have a stable reference. Without it, .filter() returns
-  // a new array every render, which changes the `venues` prop to VenueMap on every
-  // render, re-firing the markers/fitBounds effect even when data hasn't changed.
+  // useMemo: stable reference prevents VenueMap from re-firing markers on every render
   const filteredVenues = useMemo(() => venues.filter((venue) => {
     if (venueType === 'restaurant' && !venue.is_restaurant) return false
     if (venueType === 'terrace' && !venue.is_terrace) return false
@@ -100,8 +117,7 @@ export default function SearchPage() {
     return true
   }), [venues, venueType, sunFilter, shadowStatus])
 
-  // useCallback: stable refs so VenueMap's dependency array doesn't see changes
-  // on every parent render, which would re-fire addMarkers → fitBounds → zoom reset.
+  // useCallback: stable refs prevent VenueMap's dependency array from firing on every render
   const handleVenueSelect = useCallback((venue: Venue) => {
     setSelectedVenue(venue)
     mapRef.current?.flyTo(venue.lat, venue.lng)
@@ -114,158 +130,244 @@ export default function SearchPage() {
     })
   }, [])
 
-  // Map is always visible — loading and errors surface as overlays, not map replacements.
-  // emptyStateContent removed in A4b: map IS the content, even with no venues loaded.
-  const mapContent = (
-    <div style={{ flex: 1, position: 'relative', minHeight: isMobile ? '400px' : 'auto' }}>
-      <VenueMap
-        ref={mapRef}
-        venues={filteredVenues}
-        selectedVenue={selectedVenue || undefined}
-        onVenueSelect={handleVenueSelect}
-        onShadowStatusChange={handleShadowStatusChange}
-      />
-      {loading && (
-        <div style={{
-          position: 'absolute', top: '0.75rem', right: '3rem',
-          backgroundColor: COLORS.surface1, border: `1px solid ${COLORS.border}`,
-          padding: '0.375rem 0.75rem', fontSize: '12px', color: COLORS.text2,
-        }}>
-          Searching…
-        </div>
-      )}
-      {error && (
-        <div style={{
-          position: 'absolute', top: '0.75rem', left: '0.75rem', right: '0.75rem',
-          backgroundColor: COLORS.surface1, border: `1px solid ${COLORS.accent}`,
-          padding: '0.75rem 1rem', fontSize: '13px', color: COLORS.text1,
-        }}>
-          {error}
-        </div>
-      )}
-    </div>
-  )
+  // ─── Shared style constants ─────────────────────────────────────────────────
+  const edge = isMobile ? '0.75rem' : '1.25rem'
 
   return (
     <div style={{
+      position: 'relative',
+      width: '100vw',
+      height: '100vh',
+      overflow: 'hidden',
       backgroundColor: COLORS.bg,
-      color: COLORS.text1,
-      minHeight: '100vh',
       fontFamily: FONTS.body,
-      display: 'flex',
-      flexDirection: 'column',
     }}>
 
-      {/* ── Header: back link + search refinement input + result count ─────── */}
-      <div style={{
-        backgroundColor: COLORS.surface1,
-        borderBottom: `1px solid ${COLORS.border}`,
-        flexShrink: 0,
-      }}>
-        <div style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          padding: isMobile ? '0.875rem 1rem' : '0.875rem 2rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '1.25rem',
-        }}>
-          {/* Inline search refinement — header stays full-width in A4, demoted to corner in A5 */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (headerQuery.trim()) updateQuery({ q: headerQuery.trim() })
-            }}
-            style={{ flex: 1 }}
-          >
-            <input
-              type="text"
-              value={headerQuery}
-              onChange={(e) => setHeaderQuery(e.target.value)}
-              onFocus={() => setHeaderInputFocused(true)}
-              onBlur={() => setHeaderInputFocused(false)}
-              placeholder="Search restaurants, terraces, neighborhoods..."
-              style={{
-                width: '100%',
-                padding: '0.625rem 0.875rem',
-                backgroundColor: COLORS.surface2,
-                color: COLORS.text1,
-                border: `1px solid ${headerInputFocused ? COLORS.accent : COLORS.border}`,
-                fontSize: '14px',
-                outline: 'none',
-                borderRadius: '0',
-                boxSizing: 'border-box',
-                transition: 'border-color 0.2s ease',
-              }}
-            />
-          </form>
-        </div>
-
-        {/* Result count line */}
-        {searchQuery && !loading && (
-          <div style={{ maxWidth: '1400px', margin: '0 auto', padding: isMobile ? '0 1rem 0.75rem' : '0 2rem 0.75rem' }}>
-            <p style={{ fontSize: '13px', color: COLORS.text2, margin: 0 }}>
-              <span style={{ color: COLORS.accent, fontWeight: 600 }}>{filteredVenues.length}</span>
-              {' venue' + (filteredVenues.length !== 1 ? 's' : '') + ' for '}
-              <span style={{ color: COLORS.text1, fontWeight: 500 }}>"{searchQuery}"</span>
-              {filteredVenues.length < venues.length && venues.length > 0
-                ? <span style={{ color: COLORS.text3 }}> ({venues.length} total, filtered)</span>
-                : null}
-            </p>
+      {/* ── Map — full bleed, z-index 0 ─────────────────────────────────── */}
+      <div style={{ position: 'absolute', inset: 0 }}>
+        <VenueMap
+          ref={mapRef}
+          venues={filteredVenues}
+          selectedVenue={selectedVenue || undefined}
+          onVenueSelect={handleVenueSelect}
+          onShadowStatusChange={handleShadowStatusChange}
+        />
+        {loading && (
+          <div style={{
+            position: 'absolute',
+            top: '3.75rem',
+            right: edge,
+            backgroundColor: COLORS.surface1,
+            border: `1px solid ${COLORS.border}`,
+            padding: '0.25rem 0.625rem',
+            fontSize: '11px',
+            fontFamily: FONTS.body,
+            color: COLORS.text2,
+            zIndex: 15,
+            pointerEvents: 'none',
+          }}>
+            Searching…
+          </div>
+        )}
+        {error && (
+          <div style={{
+            position: 'absolute',
+            top: '3.75rem',
+            left: edge,
+            right: edge,
+            backgroundColor: COLORS.surface1,
+            border: `2px solid ${COLORS.accent}`,
+            padding: '0.75rem 1rem',
+            fontSize: '13px',
+            fontFamily: FONTS.body,
+            color: COLORS.text1,
+            zIndex: 15,
+          }}>
+            {error}
           </div>
         )}
       </div>
 
-      {/* ── Main content ─────────────────────────────────────────────────────── */}
+      {/* ── RESTO wordmark + tagline — top-left, layered on the map ─────── */}
+      {/*
+        Wordmark uses clamp(8rem, 13vw, 16rem):
+          390px  → 8rem  (128px) — Departure Mono at this size spans ~390-420px,
+                                   cropping the O at the viewport right edge ✓
+          1440px → 13vw  (~187px) — extends ~560px from left edge into map
+          2560px → capped at 16rem (256px)
+        pointerEvents: none — map receives drag/scroll events through the wordmark area.
+      */}
       <div style={{
-        display: 'flex',
-        flexDirection: isMobile ? 'column' : 'row',
-        flex: 1,
-        maxWidth: '1400px',
-        width: '100%',
-        margin: '0 auto',
-        minHeight: 0,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        zIndex: 10,
+        pointerEvents: 'none',
+        userSelect: 'none',
       }}>
-
-        {/* FilterPanel — desktop: 220px sidebar with borderRight; mobile: full-width accordion */}
-        <FilterPanel
-          type={venueType}
-          sun={sunFilter}
-          onTypeChange={(t) => updateQuery({ type: t })}
-          onSunChange={(s) => updateQuery({ sun: s })}
-          resultCount={filteredVenues.length}
-          isMobile={isMobile}
-        />
-
-        {/* Content column: ViewToggle strip + Map or List */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: isMobile ? '600px' : 0 }}>
-
-          {/* ViewToggle strip */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'flex-start',
-            padding: '0.75rem 1rem',
-            borderBottom: `1px solid ${COLORS.border}`,
-            flexShrink: 0,
-          }}>
-            <div style={{ width: '180px' }}>
-              <ViewToggle value={viewMode} onChange={(v) => updateQuery({ view: v })} />
-            </div>
-          </div>
-
-          {/* Map or List */}
-          {viewMode === 'map' ? mapContent : (
-            <ResultsList
-              venues={filteredVenues}
-              selectedVenue={selectedVenue}
-              shadowStatus={shadowStatus}
-              onVenueSelect={handleVenueSelect}
-              loading={loading}
-              error={error}
-            />
-          )}
-        </div>
+        <h1 style={{
+          fontFamily: FONTS.display,
+          fontSize: 'clamp(8rem, 13vw, 16rem)',
+          lineHeight: 1,
+          color: COLORS.text1,
+          margin: 0,
+          letterSpacing: '-0.01em',
+          whiteSpace: 'nowrap',
+        }}>
+          RESTO
+        </h1>
+        <p style={{
+          fontFamily: FONTS.body,
+          fontSize: isMobile ? '12px' : '14px',
+          fontWeight: 400,
+          color: COLORS.text1,
+          margin: '0.375rem 0 0',
+          paddingLeft: '0.25rem',
+          whiteSpace: 'nowrap',
+          lineHeight: 1.4,
+        }}>
+          The city shifts. The shadows move.
+        </p>
       </div>
+
+      {/* ── Search input — top-right ─────────────────────────────────────── */}
+      {/*
+        Desktop: input + 44px red submit button.
+        Mobile:  same layout — button is real (44×44px meets Apple's tap target minimum).
+                 Arrow is the only red element in the UI.
+      */}
+      <div style={{
+        position: 'absolute',
+        top: edge,
+        right: edge,
+        zIndex: 20,
+      }}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (headerQuery.trim()) updateQuery({ q: headerQuery.trim() })
+          }}
+          style={{ display: 'flex', alignItems: 'stretch' }}
+        >
+          <input
+            type="text"
+            value={headerQuery}
+            onChange={(e) => setHeaderQuery(e.target.value)}
+            onFocus={() => setHeaderInputFocused(true)}
+            onBlur={() => setHeaderInputFocused(false)}
+            placeholder={isMobile ? 'search' : 'search the city'}
+            style={{
+              width: isMobile ? '130px' : '200px',
+              height: '44px',
+              padding: '0 0.75rem',
+              fontFamily: FONTS.body,
+              fontSize: '13px',
+              color: COLORS.text1,
+              backgroundColor: COLORS.surface1,
+              border: `2px solid ${headerInputFocused ? COLORS.accent : COLORS.border}`,
+              borderRight: 'none',
+              borderRadius: 0,
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+          <button
+            type="submit"
+            style={{
+              width: '44px',
+              height: '44px',
+              backgroundColor: COLORS.accent,
+              color: '#ffffff',
+              border: `2px solid ${COLORS.border}`,
+              borderLeft: `2px solid ${COLORS.accent}`,
+              borderRadius: 0,
+              cursor: 'pointer',
+              fontSize: '18px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'background-color 0.15s ease',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#b31f10' }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = COLORS.accent }}
+          >
+            →
+          </button>
+        </form>
+      </div>
+
+      {/* ── Venue count — bottom-left when search active ─────────────────── */}
+      {!loading && filteredVenues.length > 0 && searchQuery && (
+        <div style={{
+          position: 'absolute',
+          bottom: '2.5rem',
+          left: edge,
+          zIndex: 10,
+          pointerEvents: 'none',
+        }}>
+          <span style={{
+            fontFamily: FONTS.display,
+            fontSize: '13px',
+            color: COLORS.text1,
+          }}>
+            {filteredVenues.length}
+          </span>
+          <span style={{
+            fontFamily: FONTS.body,
+            fontSize: '11px',
+            color: COLORS.text2,
+            marginLeft: '0.3rem',
+          }}>
+            {filteredVenues.length !== 1 ? 'venues' : 'venue'}
+          </span>
+        </div>
+      )}
+
+      {/* ── Sunset caption — bottom-right ────────────────────────────────── */}
+      {sunsetTime && (
+        <div style={{
+          position: 'absolute',
+          bottom: '2.5rem',
+          right: edge,
+          zIndex: 10,
+          pointerEvents: 'none',
+        }}>
+          <span style={{
+            fontFamily: FONTS.body,
+            fontSize: '11px',
+            color: COLORS.text3,
+          }}>
+            sunset{' '}
+          </span>
+          <span style={{
+            fontFamily: FONTS.display,
+            fontSize: '13px',
+            color: COLORS.text1,
+          }}>
+            {sunsetTime}
+          </span>
+        </div>
+      )}
+
+      {/* ── A5: FilterPanel + ViewToggle hidden — restored in Pass B ──────── */}
+      {/* The filter logic (filteredVenues, updateQuery, venueType, sunFilter)
+          is fully alive. URL params ?type=terrace still filter markers.
+          Only the visible UI controls are absent.
+      {false && (
+        <>
+          <FilterPanel
+            type={venueType}
+            sun={sunFilter}
+            onTypeChange={(t) => updateQuery({ type: t })}
+            onSunChange={(s) => updateQuery({ sun: s })}
+            resultCount={filteredVenues.length}
+            isMobile={isMobile}
+          />
+          <ViewToggle value={viewMode} onChange={(v) => updateQuery({ view: v })} />
+        </>
+      )} */}
+
     </div>
   )
 }
