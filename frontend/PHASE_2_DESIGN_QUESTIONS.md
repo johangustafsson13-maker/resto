@@ -20,8 +20,11 @@ sunOnMap layer is Phase 2 item 1 per the original design brief.
 
 ## 2. Backend browse endpoint (no-query filtered browse)
 Phase 1 (C10) chose: no API call when ?q= is absent, show prompt with example queries.
-Open question: add GET /api/browse?type=...&sun=... that returns venues matching filters without a query.
-Frontend unblock when backend ships: drop the "no q means no fetch" gating in search.tsx.
+After design-pass-v1 A4: map-as-homepage at / is permanently empty of venues until the
+user searches. This is the primary missing piece of the map-as-homepage UX — the map loads
+but shows no venue pins on first visit. Phase 2 backend browse endpoint moves to top priority.
+Frontend unblock when backend ships: drop the "no q means no fetch" gating in pages/index.tsx
+(formerly pages/search.tsx). URL filter state is already wired — only the fetch logic changes.
 
 ## 3. Cuisine and price filters in FilterPanel
 Phase 1 (C8) ships type and sun filters only. Cuisine and price intentionally deferred.
