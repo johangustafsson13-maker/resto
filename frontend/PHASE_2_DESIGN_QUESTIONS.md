@@ -66,5 +66,13 @@ the loop reasserts via filteredVenues reference churn.
 Investigate other components for the same pattern — any inline function passed as a prop to a
 component with a useEffect dependency array is a candidate for both issues.
 
+## 10. 3D pitch toggle — history and current state
+Briefly removed in design-pass-v1 A5 (incorrectly, without authorization) and restored in A5.5.
+Current state: 3D toggle at bottom-left (bottom: 4.5rem), brutalist styling matching A5 search input
+(2px ink border, no radius, punk-red #d92816 background when active). Tilt ▲/▼ appear adjacent
+when 3D mode is active. Phase 1 had the controls at top-right — moved in A5.5 to avoid conflict
+with the new search input.
+If you see the 3D toggle in an unexpected position compared to Phase 1, that's why.
+
 ## Process note
 Address items 1, 2, and 6 first — those are real architectural questions deferred from Phase 1. Items 3-5 are polish; let real usage inform priority.

@@ -230,6 +230,7 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
     const mapContainer = useRef<HTMLDivElement>(null)
     const mapRef = useRef<any>(null)
     const markersRef = useRef<any[]>([])
+    const [is3D, setIs3D] = useState(false)
 
     // Expose flyTo method via ref
     useImperativeHandle(ref, () => ({
@@ -365,13 +366,103 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
         }
       }, 15000)
 
-      // A5: custom map controls (zoom +/−, 3D toggle) removed — not part of Pass A design.
-      // Map zoom via scroll wheel / pinch. Pass B may add a styled controls component.
+      // 3D pitch toggle + tilt controls — brutalist styling, bottom-left.
+      // Positioned at bottom: 4.5rem to sit above the venue count caption (bottom: 2.5rem).
+      // Uses a local let to track state and avoid the stale-closure bug from Phase 1.
+      let is3DLocal = false
 
-      // Clean up interval on map remove
+      const controlsDiv = document.createElement('div')
+      controlsDiv.style.cssText = `
+        position: absolute;
+        bottom: 4.5rem;
+        left: 0.75rem;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        z-index: 10;
+      `
+
+      const toggle3DBtn = document.createElement('button')
+      toggle3DBtn.innerHTML = '3D'
+      toggle3DBtn.style.cssText = `
+        width: 44px;
+        height: 44px;
+        border: 2px solid ${COLORS.border};
+        background: ${COLORS.surface1};
+        color: ${COLORS.text1};
+        cursor: pointer;
+        font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      `
+
+      const tiltControlsDiv = document.createElement('div')
+      tiltControlsDiv.style.cssText = `display: none; flex-direction: row; align-items: center;`
+
+      const tiltUpBtn = document.createElement('button')
+      tiltUpBtn.innerHTML = '▲'
+      tiltUpBtn.style.cssText = `
+        width: 44px;
+        height: 44px;
+        border: 2px solid ${COLORS.border};
+        border-left: none;
+        background: ${COLORS.surface1};
+        color: ${COLORS.text1};
+        cursor: pointer;
+        font-size: 14px;
+        border-radius: 0;
+      `
+
+      const tiltDownBtn = document.createElement('button')
+      tiltDownBtn.innerHTML = '▼'
+      tiltDownBtn.style.cssText = `
+        width: 44px;
+        height: 44px;
+        border: 2px solid ${COLORS.border};
+        border-left: none;
+        background: ${COLORS.surface1};
+        color: ${COLORS.text1};
+        cursor: pointer;
+        font-size: 14px;
+        border-radius: 0;
+      `
+
+      toggle3DBtn.onclick = () => {
+        is3DLocal = !is3DLocal
+        setIs3D(is3DLocal)
+        if (is3DLocal) {
+          map.setPitch(45)
+          toggle3DBtn.style.background = COLORS.accent
+          toggle3DBtn.style.color = '#ffffff'
+          toggle3DBtn.style.borderColor = COLORS.accent
+          tiltControlsDiv.style.display = 'flex'
+        } else {
+          map.setPitch(0)
+          toggle3DBtn.style.background = COLORS.surface1
+          toggle3DBtn.style.color = COLORS.text1
+          toggle3DBtn.style.borderColor = COLORS.border
+          tiltControlsDiv.style.display = 'none'
+        }
+      }
+
+      tiltUpBtn.onclick = () => map.setPitch(Math.min(60, map.getPitch() + 5))
+      tiltDownBtn.onclick = () => map.setPitch(Math.max(0, map.getPitch() - 5))
+
+      tiltControlsDiv.appendChild(tiltUpBtn)
+      tiltControlsDiv.appendChild(tiltDownBtn)
+      controlsDiv.appendChild(toggle3DBtn)
+      controlsDiv.appendChild(tiltControlsDiv)
+      map.getCanvas().parentNode?.appendChild(controlsDiv)
+
+      // Clean up interval and controls on map remove
       const originalRemove = map.remove.bind(map)
       map.remove = function() {
         clearInterval(shadowInterval)
+        controlsDiv.remove()
         originalRemove()
       }
     })
