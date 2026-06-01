@@ -91,5 +91,21 @@ when 3D mode is active. Phase 1 had the controls at top-right — moved in A5.5 
 with the new search input.
 If you see the 3D toggle in an unexpected position compared to Phase 1, that's why.
 
+## 11. Shadow direction was 180° wrong from Phase 1 through A7 (fixed in A7.1)
+Fixed in A7.1: projectShadowPolygon was subtracting the shadow offset vector instead of
+adding it. At sun azimuth 0.4 rad (south-southwest), the code computes bearing 202.9°
+(toward the sun), then converts to math angle 112.9° (bearingRad already points AWAY from
+the sun). Subtracting that vector projected shadows toward the sun; adding it projects away,
+which is physically correct.
+
+Bug was invisible to all prior verification gates because they only verified "shadows
+render" not "shadows point in the correct direction." Plausible-looking output is not
+verification. The error was only caught by visual comparison against an external reference
+(hinthint.se) showing the same Stockholm neighborhood at the same time of day.
+
+**Lesson:** When verifying a data visualization against physical reality, find an external
+reference and compare directly. Shadows appearing on the map is a different claim from
+shadows pointing the right way.
+
 ## Process note
 Address items 1, 2, and 6 first — those are real architectural questions deferred from Phase 1. Items 3-5 are polish; let real usage inform priority.

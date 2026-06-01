@@ -57,10 +57,10 @@ function projectShadowPolygon(
   const shadowOffsetLng = Math.cos(bearingRad) * shadowLength
   const shadowOffsetLat = Math.sin(bearingRad) * shadowLength
 
-  // Project each point of the footprint backward (away from sun)
+  // Project each point away from the sun (add offset — bearingRad already points away from sun)
   return footprint.map(([lng, lat]) => [
-    lng - shadowOffsetLng,
-    lat - shadowOffsetLat,
+    lng + shadowOffsetLng,
+    lat + shadowOffsetLat,
   ])
 }
 
