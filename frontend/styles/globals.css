@@ -75,3 +75,7 @@ textarea::placeholder {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* Applied to document.body while scrubber handle is dragged — prevents cursor flicker
+   when mouse moves faster than the handle repaints */
+.grabbing, .grabbing * { cursor: grabbing !important; }

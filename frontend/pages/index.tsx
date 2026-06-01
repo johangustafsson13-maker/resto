@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/router'
 import VenueMap, { VenueMapHandle } from '../components/VenueMap'
+import TimeScrubber from '../components/TimeScrubber'
 // A5: FilterPanel, ResultsList, ViewToggle hidden — restored and restyled in Pass B
 // import FilterPanel from '../components/FilterPanel'
 // import ResultsList from '../components/ResultsList'
@@ -349,6 +350,12 @@ export default function SearchPage() {
           </span>
         </div>
       )}
+
+      {/* ── A6: TimeScrubber — visual + interactive, not yet wired to map ─── */}
+      <TimeScrubber
+        isMobile={isMobile}
+        onTimeChange={console.log}
+      />
 
       {/* ── A5: FilterPanel + ViewToggle hidden — restored in Pass B ──────── */}
       {/* The filter logic (filteredVenues, updateQuery, venueType, sunFilter)
