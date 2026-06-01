@@ -80,7 +80,7 @@ export default function VenueCard({ venue, selected = false, onClick, shadowed =
             gap: '0.5rem',
             padding: '0.4rem 0.7rem',
             backgroundColor: COLORS.surface2,
-            color: shadowed ? COLORS.shaded : COLORS.sunny,
+            color: shadowed ? COLORS.text3 : COLORS.accent,
             fontSize: '12px',
             fontWeight: 600,
             borderRadius: '0',

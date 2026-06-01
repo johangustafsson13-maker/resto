@@ -66,6 +66,23 @@ the loop reasserts via filteredVenues reference churn.
 Investigate other components for the same pattern — any inline function passed as a prop to a
 component with a useEffect dependency array is a candidate for both issues.
 
+## 8. VenueCard status pills (sunny/shaded badges)
+Bridge-fixed in A5.6 to use COLORS.accent and COLORS.text3 placeholders. The A1 palette
+deliberately deleted COLORS.sunny and COLORS.shaded (gold/gray tokens) to make amber sacred
+to the map; VenueCard hadn't been rendered (hidden behind {false && ...}) so the breakage
+was silent until A6 forced a full module-graph build.
+Real design decision for these pills lives in Pass B's card redesign — options include:
+ink-on-cream uniform treatment, accent color for 'sunny right now' active state, removal
+of color coding entirely with text-only labels, or moving sun status off the card and onto
+the map exclusively. Pick during Pass B card design pass.
+
+## 9. Verification gap — dormant render paths
+A1 palette deletion broke VenueCard's color references silently because VenueCard wasn't
+in the active render path (FilterPanel/ResultsList wrapped in {false && ...}). The break
+surfaced in A6 when a fresh build validated the whole module graph.
+Lesson: run `npm run build` (full TypeScript pass) at the end of each commit, not just at
+the final commit. Dormant paths still contain code that needs validation.
+
 ## 10. 3D pitch toggle — history and current state
 Briefly removed in design-pass-v1 A5 (incorrectly, without authorization) and restored in A5.5.
 Current state: 3D toggle at bottom-left (bottom: 4.5rem), brutalist styling matching A5 search input
