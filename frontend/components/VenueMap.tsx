@@ -5,7 +5,7 @@ const mapboxgl: any = typeof window !== 'undefined' ? require('mapbox-gl') : nul
 const turf: any = typeof window !== 'undefined' ? require('@turf/turf') : null
 import SunCalc from 'suncalc'
 import { getSunScore, isInShadow } from '../lib/sunScore'
-import { COLORS } from '../lib/theme'
+import { COLORS, BREAKPOINTS } from '../lib/theme'
 import type { Venue } from '../types'
 
 interface VenueMapProps {
@@ -13,6 +13,7 @@ interface VenueMapProps {
   onVenueSelect?: (venue: Venue) => void
   onShadowStatusChange?: (venueId: string, shadowed: boolean | null) => void
   selectedVenue?: Venue
+  scrubbedTime?: Date
 }
 
 export interface VenueMapHandle {
@@ -188,8 +189,8 @@ function generateShadowFeatures(
 // SunCalc azimuth: radians from south, clockwise (south=0, west=π/2).
 // Mapbox setLight position[1]: degrees from north, clockwise (north=0, east=90).
 // Mapbox setLight position[2]: elevation in degrees above surface (0=horizon, 90=zenith).
-function applySunLight(map: any, lat: number, lng: number) {
-  const { altitude, azimuth } = SunCalc.getPosition(new Date(), lat, lng)
+function applySunLight(map: any, lat: number, lng: number, atTime: Date) {
+  const { altitude, azimuth } = SunCalc.getPosition(atTime, lat, lng)
   const mapboxAzimuth = ((azimuth * 180 / Math.PI) + 180) % 360
   const elevationDeg = altitude * 180 / Math.PI
 
@@ -226,11 +227,13 @@ function markerColor(score: number, shadowed: boolean): string {
 }
 
 const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
-  ({ venues, onVenueSelect, onShadowStatusChange, selectedVenue }, ref) => {
+  ({ venues, onVenueSelect, onShadowStatusChange, selectedVenue, scrubbedTime }, ref) => {
     const mapContainer = useRef<HTMLDivElement>(null)
     const mapRef = useRef<any>(null)
     const markersRef = useRef<any[]>([])
     const [is3D, setIs3D] = useState(false)
+    const scrubbedTimeRef = useRef<Date | undefined>(scrubbedTime)
+    const shadowDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     // Expose flyTo method via ref
     useImperativeHandle(ref, () => ({
@@ -244,6 +247,9 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
         }
       },
     }), [])
+
+    // Keep ref in sync so map-init closure and interval always see the latest prop value
+    useEffect(() => { scrubbedTimeRef.current = scrubbedTime }, [scrubbedTime])
 
   // Initialize map once on mount
   useEffect(() => {
@@ -354,27 +360,29 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
         },
       })
 
-      // Apply real-time sun-derived directional light
-      applySunLight(map, 59.3293, 18.0686)
+      // Apply sun light at scrubbed time if set, otherwise at current real time
+      applySunLight(map, 59.3293, 18.0686, scrubbedTimeRef.current ?? new Date())
 
       // Update shadows every 15 seconds as sun moves (reduced from 5s for performance)
       // Only recalculate when zoom is appropriate for shadow rendering (zoom >= 12)
       const shadowInterval = setInterval(() => {
+        if (scrubbedTimeRef.current !== undefined) return // user is scrubbing — don't auto-advance
         const zoom = map.getZoom()
         if (zoom >= 12) {
-          applySunLight(map, 59.3293, 18.0686)
+          applySunLight(map, 59.3293, 18.0686, new Date())
         }
       }, 15000)
 
       // 3D pitch toggle + tilt controls — brutalist styling, bottom-left.
-      // Positioned at bottom: 4.5rem to sit above the venue count caption (bottom: 2.5rem).
+      // Mobile: 5.5rem (88px) to clear the 80px scrubber panel. Desktop: 4.5rem.
       // Uses a local let to track state and avoid the stale-closure bug from Phase 1.
       let is3DLocal = false
 
+      const isMobileViewport = window.innerWidth < BREAKPOINTS.mobile
       const controlsDiv = document.createElement('div')
       controlsDiv.style.cssText = `
         position: absolute;
-        bottom: 4.5rem;
+        bottom: ${isMobileViewport ? '5.5rem' : '4.5rem'};
         left: 0.75rem;
         display: flex;
         flex-direction: row;
@@ -550,6 +558,19 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
       markersRef.current = []
     }
   }, [venues, onVenueSelect, onShadowStatusChange])
+
+    // Debounced shadow redraw when scrubber moves — 100ms prevents thrash on fast drag
+    useEffect(() => {
+      if (scrubbedTime === undefined) return
+      if (shadowDebounceRef.current) clearTimeout(shadowDebounceRef.current)
+      shadowDebounceRef.current = setTimeout(() => {
+        const m = mapRef.current
+        if (m && m.loaded()) applySunLight(m, 59.3293, 18.0686, scrubbedTime)
+      }, 100)
+      return () => {
+        if (shadowDebounceRef.current) clearTimeout(shadowDebounceRef.current)
+      }
+    }, [scrubbedTime])
 
   return <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
   }

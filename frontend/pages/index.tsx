@@ -6,7 +6,6 @@ import TimeScrubber from '../components/TimeScrubber'
 // import FilterPanel from '../components/FilterPanel'
 // import ResultsList from '../components/ResultsList'
 // import ViewToggle from '../components/ViewToggle'
-import SunCalc from 'suncalc'
 import { COLORS, FONTS, BREAKPOINTS } from '../lib/theme'
 import type { Venue } from '../types'
 
@@ -37,7 +36,7 @@ export default function SearchPage() {
   const [isMobile, setIsMobile] = useState(false)
   const [headerQuery, setHeaderQuery] = useState(searchQuery)
   const [headerInputFocused, setHeaderInputFocused] = useState(false)
-  const [sunsetTime, setSunsetTime] = useState('')
+  const [scrubbedTime, setScrubbedTime] = useState<Date | undefined>(undefined)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < BREAKPOINTS.mobile)
@@ -51,22 +50,15 @@ export default function SearchPage() {
     setHeaderQuery(searchQuery)
   }, [searchQuery])
 
-  // Compute Stockholm sunset time; refresh every 60 seconds
+  // Restore scrubbed time from ?t= URL param — shadows load at the URL time, not real time
   useEffect(() => {
-    const compute = () => {
-      const times = SunCalc.getTimes(new Date(), 59.3293, 18.0686)
-      const s = times.sunset
-      if (!isNaN(s.getTime())) {
-        setSunsetTime(
-          s.getHours().toString().padStart(2, '0') + ':' +
-          s.getMinutes().toString().padStart(2, '0')
-        )
-      }
+    if (!router.isReady) return
+    const tp = router.query.t
+    if (typeof tp === 'string') {
+      const parsed = new Date(tp)
+      if (!isNaN(parsed.getTime())) setScrubbedTime(parsed)
     }
-    compute()
-    const id = setInterval(compute, 60000)
-    return () => clearInterval(id)
-  }, [])
+  }, [router.isReady]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch when query changes; no-query = clear results, no API call
   useEffect(() => {
@@ -152,6 +144,7 @@ export default function SearchPage() {
           selectedVenue={selectedVenue || undefined}
           onVenueSelect={handleVenueSelect}
           onShadowStatusChange={handleShadowStatusChange}
+          scrubbedTime={scrubbedTime}
         />
         {loading && (
           <div style={{
@@ -325,36 +318,11 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* ── Sunset caption — bottom-right ────────────────────────────────── */}
-      {sunsetTime && (
-        <div style={{
-          position: 'absolute',
-          bottom: '2.5rem',
-          right: edge,
-          zIndex: 10,
-          pointerEvents: 'none',
-        }}>
-          <span style={{
-            fontFamily: FONTS.body,
-            fontSize: '11px',
-            color: COLORS.text3,
-          }}>
-            sunset{' '}
-          </span>
-          <span style={{
-            fontFamily: FONTS.display,
-            fontSize: '13px',
-            color: COLORS.text1,
-          }}>
-            {sunsetTime}
-          </span>
-        </div>
-      )}
-
-      {/* ── A6: TimeScrubber — visual + interactive, not yet wired to map ─── */}
+      {/* ── A7: TimeScrubber wired to live shadow recalculation ─────────── */}
+      {/* Sunset info now lives in scrubber's right-edge label — standalone caption removed */}
       <TimeScrubber
         isMobile={isMobile}
-        onTimeChange={console.log}
+        onTimeChange={setScrubbedTime}
       />
 
       {/* ── A5: FilterPanel + ViewToggle hidden — restored in Pass B ──────── */}
