@@ -37,10 +37,15 @@ Re-enable both and clean up the unused-variable warnings they surface.
 ## 5. Typography polish + micro-interactions
 Per REDESIGN_STRATEGY.md Phase 2 scope. Wait until Phase 1 ships to a preview environment and is used in real conditions for a few days before deciding what actually needs polish.
 
-## 6. Frontend → backend auth forwarding
-Current state: backend /api/search requires a JWT Bearer token; frontend API route (pages/api/search.ts) doesn't forward credentials.
-Dev-only auth bypass was added in phase1(c9.6) to unblock Phase 1 verification: middleware/auth.js skips the JWT check when NODE_ENV=development, and api/search.js skips the quota block.
-Phase 2 must: design credential forwarding (forward user session token from cookie/localStorage through pages/api/search.ts to backend), remove the dev bypass in both middleware/auth.js and api/search.js, and verify auth gating works correctly end-to-end.
+## 6. Frontend → backend auth forwarding — PARTIALLY COMPLETED (Pass B Session 1)
+Auth middleware bypass removed in commit 948420b. Anonymous users can browse the map and
+scrubber, but search requires a valid JWT. The full round-trip (frontend sends Bearer token →
+proxy forwards it → backend verifies → search runs) is verified end-to-end.
+
+Remaining: backend/api/search.js still has a dev-only quota bypass (let isPaid = true when
+NODE_ENV=development). This skips the searches_remaining decrement in dev. Acceptable for
+now — does not affect auth enforcement, only quota accounting. Must be addressed before any
+deploy involving real billing or strict quota enforcement.
 
 ## 7. Pre-existing render loop in search.tsx (fixed in design-pass-v1 A3.5 + A3.6)
 The bug had TWO independent causes — both are required to be fixed together.
