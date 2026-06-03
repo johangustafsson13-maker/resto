@@ -32,7 +32,11 @@ export default function LoginPage() {
     try {
       await login(email, password)
       setSuccess(true)
-      setTimeout(() => router.push('/'), 2000)
+      setTimeout(() => {
+        const next = typeof router.query.next === 'string' ? router.query.next : '/'
+        const isValidNext = next.startsWith('/') && !next.includes('://')
+        router.push(isValidNext ? next : '/')
+      }, 2000)
     } catch (err: unknown) {
       const e = err as Error & { status?: number }
       if (e.status === 401)            setError('Invalid email or password')

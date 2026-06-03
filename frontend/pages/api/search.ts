@@ -16,13 +16,19 @@ export default async function handler(
 
   try {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+    const authHeader = req.headers.authorization
     const response = await fetch(`${apiUrl}/api/search`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(authHeader ? { Authorization: authHeader } : {}),
       },
       body: JSON.stringify({ query }),
     })
+
+    if (response.status === 401) {
+      return res.status(401).json({ error: 'Authentication required' })
+    }
 
     if (!response.ok) {
       throw new Error(`Backend API responded with ${response.status}`)

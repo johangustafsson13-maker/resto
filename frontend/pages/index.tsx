@@ -6,6 +6,7 @@ import TimeScrubber from '../components/TimeScrubber'
 // import FilterPanel from '../components/FilterPanel'
 // import ResultsList from '../components/ResultsList'
 // import ViewToggle from '../components/ViewToggle'
+import { getToken, isAuthenticated } from '../lib/auth'
 import { COLORS, FONTS, BREAKPOINTS } from '../lib/theme'
 import type { Venue } from '../types'
 
@@ -70,14 +71,29 @@ export default function SearchPage() {
       return
     }
     const run = async () => {
+      if (!isAuthenticated()) {
+        const next = encodeURIComponent(`/?q=${encodeURIComponent(searchQuery)}`)
+        router.push(`/auth/login?next=${next}`)
+        return
+      }
+
       setLoading(true)
       setError(null)
       try {
+        const token = getToken()
         const res = await fetch('/api/search', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({ query: searchQuery }),
         })
+        if (res.status === 401) {
+          const next = encodeURIComponent(`/?q=${encodeURIComponent(searchQuery)}`)
+          router.push(`/auth/login?next=${next}`)
+          return
+        }
         if (!res.ok) throw new Error('Search failed')
         const data = await res.json()
         setVenues(data.venues || [])
