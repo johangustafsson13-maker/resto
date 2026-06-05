@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/router'
 import VenueMap, { VenueMapHandle } from '../components/VenueMap'
 import TimeScrubber from '../components/TimeScrubber'
-// A5: FilterPanel, ResultsList, ViewToggle hidden — restored and restyled in Pass B
+import ResultsList from '../components/ResultsList'
+import VenueDetailSheet from '../components/VenueDetailSheet'
+// A5: FilterPanel, ViewToggle hidden — restored in Pass B Session 3
 // import FilterPanel from '../components/FilterPanel'
-// import ResultsList from '../components/ResultsList'
 // import ViewToggle from '../components/ViewToggle'
 import { getToken, isAuthenticated } from '../lib/auth'
 import { COLORS, FONTS, BREAKPOINTS } from '../lib/theme'
@@ -250,7 +251,7 @@ export default function SearchPage() {
         position: 'absolute',
         top: edge,
         right: edge,
-        zIndex: 20,
+        zIndex: 30,
       }}>
         <form
           onSubmit={(e) => {
@@ -341,10 +342,70 @@ export default function SearchPage() {
         onTimeChange={setScrubbedTime}
       />
 
-      {/* ── A5: FilterPanel + ViewToggle hidden — restored in Pass B ──────── */}
+      {/* ── Pass B Session 2: ResultsList + VenueDetailSheet ──────────────── */}
+      {/* Desktop: right-side panel. Mobile: full-width below map.
+          Detail sheet: bottom sheet (mobile) / anchored card (desktop) */}
+
+      {filteredVenues.length > 0 && searchQuery && (
+        <>
+          {/* ResultsList — right panel on desktop, full-width on mobile */}
+          <div
+            style={{
+              position: 'absolute',
+              top: isMobile ? undefined : edge,
+              bottom: isMobile ? '0' : undefined,
+              right: edge,
+              left: isMobile ? edge : undefined,
+              width: isMobile ? 'auto' : '320px',
+              height: isMobile ? '40vh' : 'auto',
+              maxHeight: isMobile ? '40vh' : '70vh',
+              backgroundColor: COLORS.surface1,
+              border: `2px solid ${COLORS.border}`,
+              borderRadius: '0',
+              zIndex: 20,
+              display: 'flex',
+              flexDirection: 'column',
+              boxSizing: 'border-box',
+            }}
+          >
+            <div
+              style={{
+                padding: '0.75rem 1rem',
+                borderBottom: `1px solid ${COLORS.border}`,
+                fontSize: '12px',
+                color: COLORS.text2,
+                fontWeight: 600,
+                backgroundColor: COLORS.surface2,
+              }}
+            >
+              {filteredVenues.length} {filteredVenues.length === 1 ? 'venue' : 'venues'}
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+              <ResultsList
+                venues={filteredVenues}
+                selectedVenue={selectedVenue}
+                shadowStatus={shadowStatus}
+                onVenueSelect={handleVenueSelect}
+                loading={loading}
+                error={null}
+              />
+            </div>
+          </div>
+
+          {/* Detail Sheet — bottom sheet on mobile, anchored card on desktop */}
+          <VenueDetailSheet
+            venue={selectedVenue ?? null}
+            shadowStatus={shadowStatus}
+            onDismiss={() => setSelectedVenue(null)}
+            isMobile={isMobile}
+          />
+        </>
+      )}
+
+      {/* ── A5: FilterPanel + ViewToggle deferred to Pass B Session 3 ──────── */}
       {/* The filter logic (filteredVenues, updateQuery, venueType, sunFilter)
           is fully alive. URL params ?type=terrace still filter markers.
-          Only the visible UI controls are absent.
+          Only the visible UI controls are deferred.
       {false && (
         <>
           <FilterPanel
