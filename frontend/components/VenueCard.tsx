@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { getSunScore } from '../lib/sunScore'
-import { COLORS } from '../lib/theme'
+import { COLORS, FONTS } from '../lib/theme'
 import type { Venue } from '../types'
 
 interface VenueCardProps {
@@ -8,9 +8,16 @@ interface VenueCardProps {
   selected?: boolean
   onClick?: () => void
   shadowed?: boolean | null
+  mode?: 'list' | 'detail'
 }
 
-export default function VenueCard({ venue, selected = false, onClick, shadowed = null }: VenueCardProps) {
+export default function VenueCard({
+  venue,
+  selected = false,
+  onClick,
+  shadowed = null,
+  mode = 'detail'
+}: VenueCardProps) {
   const [isHovered, setIsHovered] = useState(false)
   const sunScore = useMemo(
     () => (venue.lat != null && venue.lng != null)
@@ -31,6 +38,47 @@ export default function VenueCard({ venue, selected = false, onClick, shadowed =
     ? COLORS.accent
     : COLORS.border
 
+  // ─── COMPACT MODE ───────────────────────────────────────────────────
+  if (mode === 'list') {
+    return (
+      <div
+        onClick={onClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        style={{
+          padding: '0.75rem 1rem',
+          borderRadius: '0',
+          backgroundColor: COLORS.surface1,
+          border: `1px solid ${borderColor}`,
+          cursor: 'pointer',
+          transition: 'border-color 0.2s ease',
+        }}
+      >
+        {/* Name in Departure Mono */}
+        <div style={{
+          fontFamily: FONTS.display,
+          fontSize: '14px',
+          fontWeight: 400,
+          color: COLORS.text1,
+          marginBottom: '0.25rem',
+          lineHeight: 1.2,
+        }}>
+          {venue.name}
+        </div>
+
+        {/* Address in Plex Sans */}
+        <div style={{
+          fontSize: '12px',
+          color: COLORS.text2,
+          lineHeight: 1.3,
+        }}>
+          {venue.address}
+        </div>
+      </div>
+    )
+  }
+
+  // ─── DETAIL MODE ────────────────────────────────────────────────────
   return (
     <div
       onClick={onClick}
@@ -47,7 +95,14 @@ export default function VenueCard({ venue, selected = false, onClick, shadowed =
     >
       {/* Name and type */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.75rem' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: 600, margin: 0, color: COLORS.text1 }}>
+        <h3 style={{
+          fontFamily: FONTS.display,
+          fontSize: '16px',
+          fontWeight: 400,
+          margin: 0,
+          color: COLORS.text1,
+          lineHeight: 1.2,
+        }}>
           {venue.name}
         </h3>
         <span style={{
@@ -71,23 +126,34 @@ export default function VenueCard({ venue, selected = false, onClick, shadowed =
         {venue.address}
       </p>
 
-      {/* Sun status */}
+      {/* Sun status — REDESIGNED */}
       {(venue.is_terrace || venue.outdoor_seating) && shadowed !== null && (
         <div style={{ marginBottom: '0.75rem' }}>
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.4rem 0.7rem',
-            backgroundColor: COLORS.surface2,
-            color: shadowed ? COLORS.text3 : COLORS.accent,
-            fontSize: '12px',
-            fontWeight: 600,
-            borderRadius: '0',
-            border: `1px solid ${COLORS.border}`,
-          }}>
-            {shadowed ? '🌳 Shaded' : '☀️ Sunny'}
-          </span>
+          {shadowed ? (
+            // Shaded: neutral text, no background
+            <span style={{
+              display: 'inline-block',
+              padding: '0.4rem 0.7rem',
+              color: COLORS.text2,
+              fontSize: '12px',
+              fontWeight: 600,
+            }}>
+              🌳 Shaded
+            </span>
+          ) : (
+            // Sunny: accent background, white text
+            <span style={{
+              display: 'inline-block',
+              padding: '0.4rem 0.7rem',
+              backgroundColor: COLORS.accent,
+              color: '#ffffff',
+              fontSize: '12px',
+              fontWeight: 600,
+              borderRadius: '0',
+            }}>
+              ☀️ Sunny
+            </span>
+          )}
         </div>
       )}
 
