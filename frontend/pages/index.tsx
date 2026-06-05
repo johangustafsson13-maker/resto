@@ -4,9 +4,7 @@ import VenueMap, { VenueMapHandle } from '../components/VenueMap'
 import TimeScrubber from '../components/TimeScrubber'
 import ResultsList from '../components/ResultsList'
 import VenueDetailSheet from '../components/VenueDetailSheet'
-// A5: FilterPanel, ViewToggle hidden — restored in Pass B Session 3
-// import FilterPanel from '../components/FilterPanel'
-// import ViewToggle from '../components/ViewToggle'
+import FilterPanel from '../components/FilterPanel'
 import { getToken, isAuthenticated } from '../lib/auth'
 import { COLORS, FONTS, BREAKPOINTS } from '../lib/theme'
 import type { Venue } from '../types'
@@ -380,6 +378,12 @@ export default function SearchPage() {
             >
               {filteredVenues.length} {filteredVenues.length === 1 ? 'venue' : 'venues'}
             </div>
+            <FilterPanel
+              type={venueType}
+              sun={sunFilter}
+              onTypeChange={(t) => updateQuery({ type: t })}
+              onSunChange={(s) => updateQuery({ sun: s })}
+            />
             <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
               <ResultsList
                 venues={filteredVenues}
@@ -402,23 +406,6 @@ export default function SearchPage() {
         </>
       )}
 
-      {/* ── A5: FilterPanel + ViewToggle deferred to Pass B Session 3 ──────── */}
-      {/* The filter logic (filteredVenues, updateQuery, venueType, sunFilter)
-          is fully alive. URL params ?type=terrace still filter markers.
-          Only the visible UI controls are deferred.
-      {false && (
-        <>
-          <FilterPanel
-            type={venueType}
-            sun={sunFilter}
-            onTypeChange={(t) => updateQuery({ type: t })}
-            onSunChange={(s) => updateQuery({ sun: s })}
-            resultCount={filteredVenues.length}
-            isMobile={isMobile}
-          />
-          <ViewToggle value={viewMode} onChange={(v) => updateQuery({ view: v })} />
-        </>
-      )} */}
 
     </div>
   )
