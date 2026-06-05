@@ -65,6 +65,7 @@ export default function ResultsList({
             selected={selectedVenue?.id === venue.id}
             onClick={() => onVenueSelect(venue)}
             shadowed={shadowStatus[String(venue.id)] ?? null}
+            mode="list"
           />
         </div>
       ))}
