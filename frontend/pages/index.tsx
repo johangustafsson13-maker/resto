@@ -60,11 +60,34 @@ export default function SearchPage() {
     }
   }, [router.isReady]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch when query changes; no-query = clear results, no API call
+  // Browse fetch — runs on mount and when type filter changes, but only when no search query
+  useEffect(() => {
+    if (!router.isReady || searchQuery) return
+    const run = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const params = new URLSearchParams()
+        if (venueType !== 'both') params.set('type', venueType)
+        const res = await fetch(`/api/browse?${params}`)
+        if (!res.ok) throw new Error('Browse failed')
+        const data = await res.json()
+        setVenues(data.venues || [])
+        setSelectedVenue(null)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load venues')
+        setVenues([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    run()
+  }, [router.isReady, searchQuery, venueType]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch when query changes; no-query = hand off to browse effect above
   useEffect(() => {
     if (!router.isReady) return
     if (!searchQuery) {
-      setVenues([])
       setSelectedVenue(null)
       setShadowStatus({})
       return
@@ -307,7 +330,7 @@ export default function SearchPage() {
       </div>
 
       {/* ── Venue count — bottom-left when search active ─────────────────── */}
-      {!loading && filteredVenues.length > 0 && searchQuery && (
+      {!loading && filteredVenues.length > 0 && (
         <div style={{
           position: 'absolute',
           bottom: '2.5rem',
@@ -344,7 +367,7 @@ export default function SearchPage() {
       {/* Desktop: right-side panel. Mobile: full-width below map.
           Detail sheet: bottom sheet (mobile) / anchored card (desktop) */}
 
-      {filteredVenues.length > 0 && searchQuery && (
+      {filteredVenues.length > 0 && (
         <>
           {/* ResultsList — right panel on desktop, full-width on mobile */}
           <div
