@@ -265,7 +265,7 @@ function buildResponseVenue(v, explanation = null) {
  *   lng?: number
  * }
  */
-module.exports = async (req, res, next) => {
+async function handler(req, res, next) {
   try {
     const { query, limit = 5, type = 'both', filters = {}, lat, lng } = req.body;
 
@@ -418,4 +418,8 @@ module.exports = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-};
+}
+
+module.exports = handler;
+module.exports.fetchCandidates = fetchCandidates;
+module.exports.buildResponseVenue = buildResponseVenue;
