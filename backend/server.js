@@ -8,7 +8,11 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+    : ['http://localhost:3131', 'http://localhost:3000'],
+}));
 app.use('/api/', require('./middleware/rateLimit'));
 
 // Health check
@@ -19,6 +23,7 @@ app.get('/health', (req, res) => {
 // API Routes
 const authMiddleware = require('./middleware/auth');
 app.post('/api/search', authMiddleware, require('./api/search'));
+app.get('/api/browse', require('./api/browse'));
 app.post('/api/parse-intent', require('./api/parse-intent'));
 app.post('/api/rank', require('./api/rank'));
 
