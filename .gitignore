@@ -45,3 +45,4 @@ Thumbs.db
 *.sqlite3
 .claude.json
 docker-compose.yml
+.playwright-mcp/

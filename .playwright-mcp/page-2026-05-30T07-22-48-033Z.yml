@@ -1,5 +1,0 @@
-- generic [ref=e62] [cursor=pointer]:
-  - img [ref=e63]
-  - generic [ref=e65]: 2 errors
-  - button "Hide Errors" [ref=e66]:
-    - img [ref=e67]
