@@ -89,77 +89,87 @@ async function parseQueryIntent(query) {
 
 // ─── Step 2: Filter venues from DB ───────────────────────────────────────────
 
-async function fetchCandidates(intent, query, type = 'both', filters = {}) {
-  const locationCoords = resolveNeighborhood(intent.location);
-  const center = locationCoords || STOCKHOLM_CENTER;
-  // Wider radius to ensure we get enough matches for specialty cuisines
-  const radiusKm = locationCoords ? 3.0 : 6.0;
+const BASE_SELECT = `
+  SELECT id, name, address, lat, lng, cuisine_tags, price_range,
+         is_terrace, is_restaurant, indoor_seating, description,
+         google_rating, review_count, phone, website, open_hours,
+         outdoor_seating, kid_friendly, wheelchair_accessible, wifi,
+         outdoor_seats, orientation, neighbourhood, google_place_id
+  FROM venues`;
 
-  // Approximate bounding box — 1° lat ≈ 111 km; 1° lng ≈ 57 km at Stockholm's latitude
+function buildBoundingBox(center, radiusKm) {
   const latDelta = radiusKm / 111.0;
   const lngDelta = radiusKm / (111.0 * Math.cos(center.lat * (Math.PI / 180)));
-  const maxPrice = budgetToPriceRange(intent.budget);
+  return {
+    minLat: center.lat - latDelta, maxLat: center.lat + latDelta,
+    minLng: center.lng - lngDelta, maxLng: center.lng + lngDelta,
+  };
+}
 
-  // Build type filter using new is_terrace/is_restaurant columns
-  let typeFilter = '';
-  if (type === 'restaurant') {
-    typeFilter = 'AND is_restaurant = true';
-  } else if (type === 'terrace') {
-    typeFilter = 'AND is_terrace = true';
-  }
-  // else: type === 'both' or 'all', no type filter
+function matchesCuisine(venue, lowerCuisines) {
+  return venue.cuisine_tags && venue.cuisine_tags.some(tag =>
+    lowerCuisines.some(c => tag.toLowerCase().includes(c))
+  );
+}
 
-  // Build additional filters
-  let filterClauses = [];
-  let filterParams = [];
-
-  if (filters.outdoor_seating === true) {
-    filterClauses.push('AND outdoor_seating = true');
-  }
-
-  const filterSQL = filterClauses.join(' ');
-
-  const params = [
-    center.lat - latDelta, center.lat + latDelta,
-    center.lng - lngDelta, center.lng + lngDelta,
-    maxPrice,
-    ...filterParams,
-  ];
-
-  const candidates = await db.any(
-    `SELECT id, name, address, lat, lng, cuisine_tags, price_range,
-            is_terrace, is_restaurant, indoor_seating, description,
-            google_rating, review_count, phone, website, open_hours,
-            outdoor_seating, kid_friendly, wheelchair_accessible, wifi,
-            outdoor_seats, orientation, neighbourhood, google_place_id
-     FROM venues
+async function queryArea(box, maxPrice, typeFilter, extraFilter, limit = 80) {
+  return db.any(
+    `${BASE_SELECT}
      WHERE lat::float BETWEEN $1 AND $2
        AND lng::float BETWEEN $3 AND $4
        AND ($5::int IS NULL OR price_range IS NULL OR price_range <= $5)
        ${typeFilter}
-       ${filterSQL}
-     ORDER BY google_rating::float DESC NULLS LAST,
-              review_count DESC NULLS LAST
-     LIMIT 80`,
-    params
+       ${extraFilter}
+     ORDER BY google_rating::float DESC NULLS LAST, review_count DESC NULLS LAST
+     LIMIT ${limit}`,
+    [box.minLat, box.maxLat, box.minLng, box.maxLng, maxPrice]
   );
+}
 
-  // If cuisine was specified in intent, bubble matching venues to the top
-  // so Claude sees the most relevant candidates first (it only sees top 30)
+async function fetchCandidates(intent, query, type = 'both', filters = {}) {
+  const locationCoords = resolveNeighborhood(intent.location);
+  const center = locationCoords || STOCKHOLM_CENTER;
+  const maxPrice = budgetToPriceRange(intent.budget);
+
+  let typeFilter = '';
+  if (type === 'restaurant') typeFilter = 'AND is_restaurant = true';
+  else if (type === 'terrace') typeFilter = 'AND is_terrace = true';
+
+  const extraFilter = filters.outdoor_seating === true ? 'AND outdoor_seating = true' : '';
   const cuisineFromIntent = intent.cuisine && intent.cuisine.length > 0 ? intent.cuisine : null;
+
+  // ── When cuisine is specified: hard filter, never return non-cuisine venues ──
   if (cuisineFromIntent) {
     const lowerCuisines = cuisineFromIntent.map(c => c.toLowerCase());
-    const matching = candidates.filter(v =>
-      v.cuisine_tags && v.cuisine_tags.some(tag =>
-        lowerCuisines.some(c => tag.toLowerCase().includes(c))
-      )
-    );
-    const rest = candidates.filter(v => !matching.includes(v));
-    console.log(`[search] cuisine filter [${cuisineFromIntent}]: ${matching.length} matches + ${rest.length} others`);
-    return [...matching, ...rest];
+
+    // 1. Try local area first (3km if neighborhood known, 6km otherwise)
+    const localBox = buildBoundingBox(center, locationCoords ? 3.0 : 6.0);
+    const localVenues = await queryArea(localBox, maxPrice, typeFilter, extraFilter, 80);
+    const localMatches = localVenues.filter(v => matchesCuisine(v, lowerCuisines));
+
+    if (localMatches.length >= 3) {
+      console.log(`[search] cuisine [${cuisineFromIntent}]: ${localMatches.length} matches in local area`);
+      return localMatches;
+    }
+
+    // 2. Expand city-wide — cuisine is rare or not in that neighborhood
+    const cityBox = buildBoundingBox(STOCKHOLM_CENTER, 15.0);
+    const cityVenues = await queryArea(cityBox, maxPrice, typeFilter, extraFilter, 150);
+    const cityMatches = cityVenues.filter(v => matchesCuisine(v, lowerCuisines));
+
+    if (cityMatches.length > 0) {
+      console.log(`[search] cuisine [${cuisineFromIntent}]: ${localMatches.length} local, expanded to ${cityMatches.length} city-wide`);
+      return cityMatches;
+    }
+
+    // 3. Nothing found — return empty so frontend can show "no results"
+    console.log(`[search] cuisine [${cuisineFromIntent}]: no matches found in Stockholm`);
+    return [];
   }
 
-  return candidates;
+  // ── No cuisine specified: return top-rated venues in area ──────────────────
+  const box = buildBoundingBox(center, locationCoords ? 3.0 : 6.0);
+  return queryArea(box, maxPrice, typeFilter, extraFilter, 80);
 }
 
 // ─── Step 3: Rank via Claude ──────────────────────────────────────────────────
