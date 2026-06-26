@@ -304,6 +304,18 @@ async function decrementQuota(userId, isPaid) {
   ).catch(err => console.error('[search] quota decrement failed:', err.message));
 }
 
+// ─── Analytics ────────────────────────────────────────────────────────────────
+
+// Records each search in search_queries. Fire-and-forget: it never awaits into the
+// request path and never throws, so analytics can't slow down or break a search.
+function logSearch(userId, query, intent, resultsCount) {
+  db.none(
+    `INSERT INTO search_queries (user_id, query, intent, results_count)
+     VALUES ($1, $2, $3::jsonb, $4)`,
+    [userId ?? null, query, JSON.stringify(intent ?? null), resultsCount]
+  ).catch(err => console.error('[search] analytics log failed:', err.message));
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 /**
@@ -362,6 +374,7 @@ async function handler(req, res, next) {
     const cachedVenues = await cache.getCached(key);
     if (cachedVenues) {
       await decrementQuota(req.user.userId, isPaid);
+      logSearch(req.user.userId, trimmed, intent, cachedVenues.length);
       return res.json({ query: trimmed, type, intent, venues: cachedVenues, total: cachedVenues.length });
     }
 
@@ -377,6 +390,7 @@ async function handler(req, res, next) {
     console.log(`[search] candidates: ${candidates.length} venues (top: ${candidates.slice(0,3).map(v => v.name).join(', ')})`);
 
     if (candidates.length === 0) {
+      logSearch(req.user.userId, trimmed, intent, 0);
       return res.json({ query: trimmed, intent, venues: [] });
     }
 
@@ -397,6 +411,9 @@ async function handler(req, res, next) {
 
     // Decrement quota for free users (no-op unless QUOTA_ENABLED=true)
     await decrementQuota(req.user.userId, isPaid);
+
+    // Analytics (fire-and-forget)
+    logSearch(req.user.userId, trimmed, intent, venues.length);
 
     return res.json({
       query: trimmed,

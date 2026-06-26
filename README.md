@@ -148,7 +148,10 @@ relying on them:
   billing exists; no code change needed. Until then, searches are unlimited once logged in.
 - **Sentiment analysis.** `claude/sentiment-analyzer.js` exists and reviews are scraped,
   but nothing runs the analyzer; the `reviews` sentiment columns are never populated.
-- **Analytics.** The `search_queries` table is defined but never written to.
+- **Analytics.** Every search is now logged to `search_queries` (user, query, parsed
+  intent, result count) via a fire-and-forget insert in `api/search.js`. Still missing:
+  click-through tracking (`clicked_venue_id` is never set — needs a small click endpoint
+  + frontend ping).
 - **Response cache.** The Redis write-through cache in `api/search.js` is wired up and
   active, but no-ops until `REDIS_ENABLED=true` (no Redis is provisioned yet).
 - **Row-Level Security.** The app's effective access control is the Express backend

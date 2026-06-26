@@ -17,7 +17,11 @@ const mockDb = {
     if (/FROM users/.test(sql)) { state.fetchQuota++; return state.users[params[0]] || null; }
     return null;
   },
-  none: async (sql) => { if (/searches_remaining = GREATEST/.test(sql)) state.decrements++; return null; },
+  none: async (sql) => {
+    if (/searches_remaining = GREATEST/.test(sql)) state.decrements++;
+    if (/INSERT INTO search_queries/.test(sql)) state.logged++;
+    return null;
+  },
   any: async () => ([{ id: 1, name: 'A', address: 'x', lat: 59.3, lng: 18.0, cuisine_tags: ['Italian'], price_range: 2, google_rating: 4.5, review_count: 10, is_restaurant: true }]),
 };
 const mockCache = { getCached: async () => state.cacheReturn, setCached: async () => {} };
@@ -44,7 +48,7 @@ const run = async (h, userId) => { const res = makeRes(); await h({ body: { quer
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log('FAIL:', m); } };
-const reset = (u) => { state.users = { u1: u }; state.fetchQuota = 0; state.decrements = 0; state.cacheReturn = null; };
+const reset = (u) => { state.users = { u1: u }; state.fetchQuota = 0; state.decrements = 0; state.logged = 0; state.cacheReturn = null; };
 
 (async () => {
   // QUOTA OFF (default) → no quota DB work, behaves as live today
@@ -55,6 +59,7 @@ const reset = (u) => { state.users = { u1: u }; state.fetchQuota = 0; state.decr
   ok(res.body && res.body.venues && res.body.venues.length === 1, 'OFF: returns venues');
   ok(state.fetchQuota === 0, 'OFF: quota not fetched');
   ok(state.decrements === 0, 'OFF: not decremented');
+  ok(state.logged === 1, 'OFF: search logged for analytics');
 
   // QUOTA ON, free user exhausted → 403
   process.env.QUOTA_ENABLED = 'true';
@@ -82,6 +87,7 @@ const reset = (u) => { state.users = { u1: u }; state.fetchQuota = 0; state.decr
   res = await run(freshHandler(), 'u1');
   ok(res.statusCode === 200 && res.body.venues[0].name === 'cached', 'cache hit: returns cached');
   ok(state.decrements === 1, 'cache hit: still decrements');
+  ok(state.logged === 1, 'cache hit: search logged for analytics');
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
