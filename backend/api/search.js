@@ -17,6 +17,13 @@ function cacheKey(query, intent) {
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL = 'claude-sonnet-4-6';
 
+// Freemium quota. OFF by default — there is no billing/upgrade path yet, so
+// enabling it would wall free users with no way to pay. Flip QUOTA_ENABLED=true
+// once a payment flow exists. The full enforcement logic lives below, gated on
+// this flag, so turning it on is a one-line config change (no code edits).
+const QUOTA_ENABLED = process.env.QUOTA_ENABLED === 'true';
+const FREE_DAILY_SEARCHES = parseInt(process.env.FREE_DAILY_SEARCHES, 10) || 3;
+
 // ─── Neighborhood coordinate lookup ──────────────────────────────────────────
 
 const NEIGHBORHOODS = {
@@ -249,6 +256,54 @@ function buildResponseVenue(v, explanation = null) {
   return venue;
 }
 
+// ─── Freemium quota (flag-gated; off until billing exists) ────────────────────
+
+// Loads the caller's quota row, resets the 24h window if it has elapsed, and
+// decides whether the search is allowed. Returns either { quotaUser, isPaid } or
+// { error: { status, body } } ready to hand straight to Express.
+async function checkQuota(userId) {
+  let quotaUser;
+  try {
+    quotaUser = await db.oneOrNone(
+      'SELECT searches_remaining, searches_reset_at, subscription_status FROM users WHERE id = $1',
+      [userId]
+    );
+  } catch (err) {
+    console.error('[search] quota fetch failed:', err.message);
+    return { error: { status: 500, body: { error: 'Database error' } } };
+  }
+  if (!quotaUser) {
+    return { error: { status: 401, body: { error: 'User not found' } } };
+  }
+
+  // Reset the rolling 24-hour window when it has expired.
+  const now = new Date();
+  if (quotaUser.searches_reset_at && quotaUser.searches_reset_at < now) {
+    const nextReset = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    await db.none(
+      'UPDATE users SET searches_remaining = $1, searches_reset_at = $2 WHERE id = $3',
+      [FREE_DAILY_SEARCHES, nextReset, userId]
+    ).catch(err => console.error('[search] quota reset failed:', err.message));
+    quotaUser.searches_remaining = FREE_DAILY_SEARCHES;
+  }
+
+  const isPaid = quotaUser.subscription_status === 'paid';
+  if (!isPaid && quotaUser.searches_remaining <= 0) {
+    return { error: { status: 403, body: { error: 'Daily search limit reached. Upgrade to premium.' } } };
+  }
+  return { quotaUser, isPaid };
+}
+
+// Decrement a free user's remaining searches (GREATEST avoids going negative on
+// concurrent requests). No-op when the quota feature is off or the user is paid.
+async function decrementQuota(userId, isPaid) {
+  if (!QUOTA_ENABLED || isPaid) return;
+  await db.none(
+    'UPDATE users SET searches_remaining = GREATEST(searches_remaining - 1, 0) WHERE id = $1',
+    [userId]
+  ).catch(err => console.error('[search] quota decrement failed:', err.message));
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 /**
@@ -283,42 +338,12 @@ async function handler(req, res, next) {
     const trimmed = query.trim();
     const topN = Math.min(Math.max(parseInt(limit, 10) || 5, 1), 10);
 
-    // TEMP: relaxed for local dev — Phase 2 will implement proper credential forwarding from frontend API route
-    let isPaid = true; // default in dev: skip quota decrement
-    if (process.env.NODE_ENV !== 'development') {
-      // ── Quota check ─────────────────────────────────────────────────────────
-      let quotaUser;
-      try {
-        quotaUser = await db.oneOrNone(
-          'SELECT searches_remaining, searches_reset_at, subscription_status FROM users WHERE id = $1',
-          [req.user.userId]
-        );
-      } catch (err) {
-        console.error('[search] quota fetch failed:', err.message);
-        return res.status(500).json({ error: 'Database error' });
-      }
-
-      if (!quotaUser) {
-        return res.status(401).json({ error: 'User not found' });
-      }
-
-      // Reset window when the 24-hour period has expired
-      const now = new Date();
-      if (quotaUser.searches_reset_at && quotaUser.searches_reset_at < now) {
-        const nextReset = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-        await db.none(
-          'UPDATE users SET searches_remaining = 3, searches_reset_at = $1 WHERE id = $2',
-          [nextReset, req.user.userId]
-        ).catch(err => console.error('[search] quota reset failed:', err.message));
-        quotaUser.searches_remaining = 3;
-      }
-
-      isPaid = quotaUser.subscription_status === 'paid';
-      // TEMP: Disable quota for MVP testing — will re-enable for production
-      // if (!isPaid && quotaUser.searches_remaining <= 0) {
-      //   return res.status(403).json({ error: 'Daily search limit reached. Upgrade to premium.' });
-      // }
-      // ───────────────────────────────────────────────────────────────────────
+    // ── Freemium quota — no-op unless QUOTA_ENABLED=true ─────────────────────
+    let isPaid = false;
+    if (QUOTA_ENABLED) {
+      const q = await checkQuota(req.user.userId);
+      if (q.error) return res.status(q.error.status).json(q.error.body);
+      isPaid = q.isPaid;
     }
 
     // 1. Parse natural language → structured intent
@@ -331,20 +356,13 @@ async function handler(req, res, next) {
       return res.status(500).json({ error: 'Failed to parse search intent' });
     }
 
-    // Cache check — skip the DB fetch and Claude ranking if we have a fresh result
+    // Cache check — skip the DB fetch and Claude ranking on a fresh hit.
+    // cache.* are no-ops when REDIS_ENABLED is not 'true', so this is safe always.
     const key = cacheKey(trimmed, intent);
-    // TEMP: Disable cache to debug ranking issues
-    // const cachedVenues = await cache.getCached(key);
-    const cachedVenues = null;
-    if (cachedVenues && false) {
-      // TEMP: Disable quota decrement for MVP testing
-      // if (!isPaid) {
-      //   await db.none(
-      //     'UPDATE users SET searches_remaining = GREATEST(searches_remaining - 1, 0) WHERE id = $1',
-      //     [req.user.userId]
-      //   ).catch(err => console.error('[search] quota decrement failed:', err.message));
-      // }
-      return res.json({ query: trimmed, type, intent, venues: cachedVenues });
+    const cachedVenues = await cache.getCached(key);
+    if (cachedVenues) {
+      await decrementQuota(req.user.userId, isPaid);
+      return res.json({ query: trimmed, type, intent, venues: cachedVenues, total: cachedVenues.length });
     }
 
     // 2. Filter candidates from database
@@ -377,13 +395,8 @@ async function handler(req, res, next) {
     // Write-through cache — fire-and-forget, never delays the response
     cache.setCached(key, venues, 3600);
 
-    // Decrement quota for free users (GREATEST prevents going negative on races)
-    if (!isPaid) {
-      await db.none(
-        'UPDATE users SET searches_remaining = GREATEST(searches_remaining - 1, 0) WHERE id = $1',
-        [req.user.userId]
-      ).catch(err => console.error('[search] quota decrement failed:', err.message));
-    }
+    // Decrement quota for free users (no-op unless QUOTA_ENABLED=true)
+    await decrementQuota(req.user.userId, isPaid);
 
     return res.json({
       query: trimmed,

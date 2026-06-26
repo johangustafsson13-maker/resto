@@ -9,7 +9,7 @@
     "build": "echo 'No build step needed for Express'",
     "migrate": "node run-migration.js",
     "scrape": "node scrapers/google-maps.js",
-    "test": "echo 'No tests yet' && exit 0"
+    "test": "node api/search.quota.test.js"
   },
   "keywords": [
     "restaurant",

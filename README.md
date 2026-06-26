@@ -141,13 +141,16 @@ Frontend: `npm run dev` · `npm run build` · `npm start` · `npm run lint` · `
 These are advertised or scaffolded but **not** currently functional — be aware before
 relying on them:
 
-- **Freemium quota / billing.** The `users` table tracks `searches_remaining` and
-  `subscription_status`, but quota enforcement and decrement are currently commented out
-  in `api/search.js` — searches are effectively unlimited once logged in.
+- **Freemium quota / billing.** Quota enforcement is fully implemented and tested in
+  `api/search.js` (`checkQuota` / `decrementQuota`) but **gated off** via `QUOTA_ENABLED`
+  (default `false`), because there is no payment/upgrade path yet — enabling it would wall
+  free users with no way to pay. Set `QUOTA_ENABLED=true` (and `FREE_DAILY_SEARCHES`) once
+  billing exists; no code change needed. Until then, searches are unlimited once logged in.
 - **Sentiment analysis.** `claude/sentiment-analyzer.js` exists and reviews are scraped,
   but nothing runs the analyzer; the `reviews` sentiment columns are never populated.
 - **Analytics.** The `search_queries` table is defined but never written to.
-- **Response cache.** Redis caching code exists but is disabled in `api/search.js`.
+- **Response cache.** The Redis write-through cache in `api/search.js` is wired up and
+  active, but no-ops until `REDIS_ENABLED=true` (no Redis is provisioned yet).
 - **Row-Level Security.** The app's effective access control is the Express backend
   (bcrypt + JWT), which talks to Postgres over a privileged connection that bypasses
   RLS — that backend is the trust boundary, by design. `rls_policies.sql` is now
