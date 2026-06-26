@@ -7,6 +7,7 @@ const INTENT_PARSER_SYSTEM = `You are an expert restaurant intent parser. Your j
 
 Extract the following fields:
 - location: Neighborhood or area in Stockholm (e.g., "Stureplan", "Södermalm", "Gamla Stan") or null if not specified
+- cuisine: Array of cuisine types explicitly or implicitly requested (e.g., ["Sushi"], ["Italian"], ["Café", "Coffee"], ["Burgers"]) or [] if not specified. Be specific — "sushi" → ["Sushi"], "coffee" → ["Café"], "pizza" → ["Pizza"], "thai" → ["Thai"]
 - time: One of 'breakfast', 'lunch', 'dinner', 'late_night', 'coffee', or null if not specified
 - ambiance: One or more of: 'casual', 'romantic', 'business', 'family', 'quiet', 'lively', 'trendy', 'cozy', 'upscale', or null
 - budget: Maximum SEK budget as a number (e.g., 200, 500) or null if not specified
@@ -20,10 +21,26 @@ Always respond with ONLY valid JSON. No markdown, no explanation, just pure JSON
 
 Example queries and expected output:
 
+Query: "sushi Östermalm"
+Output:
+{
+  "location": "Östermalm",
+  "cuisine": ["Sushi", "Japanese"],
+  "time": null,
+  "ambiance": null,
+  "budget": null,
+  "party_size": null,
+  "dietary_restrictions": [],
+  "outdoor": false,
+  "must_have_features": [],
+  "special_occasions": null
+}
+
 Query: "best lunch spot near Stureplan for business meeting under 200 SEK"
 Output:
 {
   "location": "Stureplan",
+  "cuisine": [],
   "time": "lunch",
   "ambiance": ["business"],
   "budget": 200,
@@ -38,6 +55,7 @@ Query: "cozy coffee place with wifi in Södermalm, vegetarian options"
 Output:
 {
   "location": "Södermalm",
+  "cuisine": ["Café"],
   "time": "coffee",
   "ambiance": ["cozy"],
   "budget": null,
@@ -52,6 +70,7 @@ Query: "romantic dinner for 2, no budget limit, somewhere quiet"
 Output:
 {
   "location": null,
+  "cuisine": [],
   "time": "dinner",
   "ambiance": ["romantic", "quiet"],
   "budget": null,
@@ -67,15 +86,9 @@ const parseIntent = (query) => {
     systemPrompt: INTENT_PARSER_SYSTEM,
     userMessage: query,
     expectedFields: [
-      'location',
-      'time',
-      'ambiance',
-      'budget',
-      'party_size',
-      'dietary_restrictions',
-      'outdoor',
-      'must_have_features',
-      'special_occasions'
+      'location', 'cuisine', 'time', 'ambiance', 'budget',
+      'party_size', 'dietary_restrictions', 'outdoor',
+      'must_have_features', 'special_occasions'
     ]
   };
 };

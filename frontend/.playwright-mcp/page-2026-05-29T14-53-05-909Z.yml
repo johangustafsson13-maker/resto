@@ -1,0 +1,90 @@
+- generic [ref=e1]:
+  - generic [ref=e18]:
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - button "← RESTO" [ref=e21] [cursor=pointer]
+        - textbox "Search restaurants, terraces, neighborhoods..." [ref=e23]: restaurant Östermalm
+      - paragraph [ref=e25]:
+        - text: 5 venues for
+        - generic [ref=e26]: "\"restaurant Östermalm\""
+    - generic [ref=e27]:
+      - button "Filters ▼" [ref=e172] [cursor=pointer]:
+        - generic [ref=e173]: Filters
+        - generic [ref=e174]: ▼
+      - generic [ref=e43]:
+        - generic [ref=e46]:
+          - button "Map" [ref=e47] [cursor=pointer]
+          - button "List" [active] [ref=e48] [cursor=pointer]
+        - generic [ref=e175]:
+          - generic [ref=e177] [cursor=pointer]:
+            - generic [ref=e178]:
+              - heading "Bar Elisabeth" [level=3] [ref=e179]
+              - generic [ref=e180]: DUAL
+            - paragraph [ref=e181]: Tegnérgatan 11, 111 40 Stockholm, Sweden
+            - generic [ref=e183]: ☀️ Sunny
+            - generic [ref=e184]:
+              - generic [ref=e185]: 🪑 Outdoor
+              - generic [ref=e186]: 🏠 Indoor
+            - generic [ref=e188]:
+              - generic [ref=e189]: ★
+              - generic [ref=e190]: "5.0"
+            - generic [ref=e192]: Bar
+            - link "View website →" [ref=e194]:
+              - /url: https://www.instagram.com/barelisabethstockholm/?utm_source=google
+          - generic [ref=e196] [cursor=pointer]:
+            - generic [ref=e197]:
+              - heading "Hotel Frantz Restaurant" [level=3] [ref=e198]
+              - generic [ref=e199]: DUAL
+            - paragraph [ref=e200]: Peter Myndes backe 5, 116 46 Stockholm, Sweden
+            - generic [ref=e202]: ☀️ Sunny
+            - generic [ref=e203]:
+              - generic [ref=e204]: 🪑 Outdoor
+              - generic [ref=e205]: 🏠 Indoor
+            - generic [ref=e207]:
+              - generic [ref=e208]: ★
+              - generic [ref=e209]: "5.0"
+            - generic [ref=e211]: Bar
+            - link "View website →" [ref=e213]:
+              - /url: https://www.hotelfrantz.se/restaurang-och-barhttps://www.hotelruth.se/restaurang-och-bar?utm_source=google&utm_medium=organic&utm_campaign=google-business-profile-restaurant
+          - generic [ref=e215] [cursor=pointer]:
+            - generic [ref=e216]:
+              - heading "Lilla Gästabud" [level=3] [ref=e217]
+              - generic [ref=e218]: RESTAURANT
+            - paragraph [ref=e219]: Lilla Nygatan 16, 111 28 Stockholm, Sweden
+            - generic [ref=e221]: 🏠 Indoor
+            - generic [ref=e223]:
+              - generic [ref=e224]: ★
+              - generic [ref=e225]: "4.9"
+            - generic [ref=e227]: Restaurant
+            - link "View website →" [ref=e229]:
+              - /url: https://www.stockholmsgastabud.se/
+          - generic [ref=e231] [cursor=pointer]:
+            - generic [ref=e232]:
+              - heading "Gamla Stans Lykta" [level=3] [ref=e233]
+              - generic [ref=e234]: RESTAURANT
+            - paragraph [ref=e235]: Österlånggatan 8, 111 31 Stockholm, Sweden
+            - generic [ref=e237]: 🏠 Indoor
+            - generic [ref=e239]:
+              - generic [ref=e240]: ★
+              - generic [ref=e241]: "4.8"
+            - generic [ref=e243]: Restaurant
+            - link "View website →" [ref=e245]:
+              - /url: https://www.instagram.com/gamlastans.lykta/
+          - generic [ref=e247] [cursor=pointer]:
+            - generic [ref=e248]:
+              - heading "Komet Café Stockholm" [level=3] [ref=e249]
+              - generic [ref=e250]: DUAL
+            - paragraph [ref=e251]: Kungsholmsgatan 10, 112 27 Stockholm, Sweden
+            - generic [ref=e253]: ☀️ Sunny
+            - generic [ref=e254]:
+              - generic [ref=e255]: 🪑 Outdoor
+              - generic [ref=e256]: 🏠 Indoor
+            - generic [ref=e258]:
+              - generic [ref=e259]: ★
+              - generic [ref=e260]: "4.8"
+            - generic [ref=e261]:
+              - generic [ref=e262]: Bakery
+              - generic [ref=e263]: Café
+            - link "View website →" [ref=e265]:
+              - /url: http://www.kometstockholm.com/
+  - alert [ref=e17]: /search?q=restaurant+%C3%96stermalm&view=list

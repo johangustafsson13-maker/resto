@@ -69,7 +69,7 @@ export default function SearchPage() {
       try {
         const params = new URLSearchParams()
         if (venueType !== 'both') params.set('type', venueType)
-        const res = await fetch(`/api/browse?${params}`)
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/browse?${params}`)
         if (!res.ok) throw new Error('Browse failed')
         const data = await res.json()
         setVenues(data.venues || [])

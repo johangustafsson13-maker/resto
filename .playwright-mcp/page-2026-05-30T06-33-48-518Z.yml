@@ -1,0 +1,30 @@
+- generic [ref=e2]:
+  - generic [ref=e4]:
+    - img [ref=e7] [cursor=pointer]
+    - banner [ref=e10]:
+      - generic [ref=e11] [cursor=pointer]:
+        - img
+      - link "Fonts 100":
+        - /url: /
+        - generic: Fonts
+        - generic: "100"
+      - link "Pairs 59" [ref=e12] [cursor=pointer]:
+        - /url: /pairs
+        - generic [ref=e13]: Pairs
+        - generic [ref=e14]: "59"
+      - link "Licenses" [ref=e15] [cursor=pointer]:
+        - /url: /licenses/itf-ffl
+        - generic [ref=e16]: Licenses
+      - img [ref=e19] [cursor=pointer]
+      - generic [ref=e21]:
+        - generic:
+          - generic: No styles selected
+    - contentinfo [ref=e23]:
+      - generic [ref=e24]: Copyright © 2021 — 2026 Indian Type Foundry. All rights reserved.
+  - generic:
+    - generic:
+      - img
+  - generic [ref=e25]:
+    - img [ref=e26]
+    - generic [ref=e30]: Font family not found
+    - img [ref=e31] [cursor=pointer]

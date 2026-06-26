@@ -1,0 +1,45 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - textbox "Search restaurants, terraces, neighborhoods..." [ref=e7]: restaurant
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - paragraph [ref=e10]: Filters
+        - paragraph [ref=e11]: 0 venues
+        - generic [ref=e12]:
+          - paragraph [ref=e13]: Type
+          - generic [ref=e14]:
+            - button "🍽️Restaurants" [ref=e15] [cursor=pointer]
+            - button "☀️Terraces" [ref=e16] [cursor=pointer]
+            - button "✦All Venues" [ref=e17] [cursor=pointer]
+        - generic [ref=e18]:
+          - paragraph [ref=e19]: Sunlight
+          - generic [ref=e20]:
+            - button "Any" [ref=e21] [cursor=pointer]
+            - button "☀️ Sunny" [ref=e22] [cursor=pointer]
+            - button "🌳 Shaded" [ref=e23] [cursor=pointer]
+      - generic [ref=e24]:
+        - generic [ref=e27]:
+          - button "Map" [ref=e28] [cursor=pointer]
+          - button "List" [ref=e29] [cursor=pointer]
+        - generic [ref=e30]:
+          - generic [ref=e31]:
+            - region "Map" [ref=e33]
+            - generic [ref=e34]:
+              - generic:
+                - generic:
+                  - link "Mapbox logo":
+                    - /url: https://www.mapbox.com/
+              - generic [ref=e36]:
+                - button "Toggle attribution"
+                - list [ref=e37]:
+                  - link "Mapbox" [ref=e38] [cursor=pointer]:
+                    - /url: https://www.mapbox.com/about/maps
+                    - text: © Mapbox
+                  - link "OpenStreetMap" [ref=e39] [cursor=pointer]:
+                    - /url: https://www.openstreetmap.org/copyright/
+                    - text: © OpenStreetMap
+                  - link "Map feedback" [ref=e40] [cursor=pointer]:
+                    - /url: https://apps.mapbox.com/feedback/?owner=mapbox&id=light-v11&access_token=pk.eyJ1Ijoiam9oYW5nc3NvbiIsImEiOiJjbW5yanRqb2kwMnNtMnFzNm1ueG03ZXV0In0.ICtGc5iAavLZS3UkA_dJjA#/18.0686/59.3293/12
+                    - text: Improve this map
+          - generic [ref=e41]: Searching…
+  - alert [ref=e42]

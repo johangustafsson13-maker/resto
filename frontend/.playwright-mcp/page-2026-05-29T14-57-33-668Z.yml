@@ -1,0 +1,76 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - button "← RESTO" [ref=e6] [cursor=pointer]
+        - textbox "Search restaurants, terraces, neighborhoods..." [ref=e8]: restaurant
+      - paragraph [ref=e34]:
+        - text: 3 venues for
+        - generic [ref=e35]: "\"restaurant\""
+        - generic [ref=e121]: (5 total, filtered)
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - paragraph [ref=e11]: Filters
+        - paragraph [ref=e12]: 3 venues
+        - generic [ref=e13]:
+          - paragraph [ref=e14]: Type
+          - generic [ref=e15]:
+            - button "🍽️Restaurants" [active] [ref=e16] [cursor=pointer]
+            - button "☀️Terraces" [ref=e17] [cursor=pointer]
+            - button "✦All Venues" [ref=e18] [cursor=pointer]
+        - generic [ref=e19]:
+          - paragraph [ref=e20]: Sunlight
+          - generic [ref=e21]:
+            - button "Any" [ref=e22] [cursor=pointer]
+            - button "☀️ Sunny" [ref=e23] [cursor=pointer]
+            - button "🌳 Shaded" [ref=e24] [cursor=pointer]
+      - generic [ref=e25]:
+        - generic [ref=e28]:
+          - button "Map" [ref=e29] [cursor=pointer]
+          - button "List" [ref=e30] [cursor=pointer]
+        - generic [ref=e31]:
+          - generic [ref=e38] [cursor=pointer]:
+            - generic [ref=e39]:
+              - heading "Bar Elisabeth" [level=3] [ref=e40]
+              - generic [ref=e41]: DUAL
+            - paragraph [ref=e42]: Tegnérgatan 11, 111 40 Stockholm, Sweden
+            - generic [ref=e43]:
+              - generic [ref=e44]: 🪑 Outdoor
+              - generic [ref=e45]: 🏠 Indoor
+            - generic [ref=e47]:
+              - generic [ref=e48]: ★
+              - generic [ref=e49]: "5.0"
+            - generic [ref=e51]: Bar
+            - link "View website →" [ref=e53]:
+              - /url: https://www.instagram.com/barelisabethstockholm/?utm_source=google
+          - generic [ref=e55] [cursor=pointer]:
+            - generic [ref=e56]:
+              - heading "Hotel Frantz Restaurant" [level=3] [ref=e57]
+              - generic [ref=e58]: DUAL
+            - paragraph [ref=e59]: Peter Myndes backe 5, 116 46 Stockholm, Sweden
+            - generic [ref=e60]:
+              - generic [ref=e61]: 🪑 Outdoor
+              - generic [ref=e62]: 🏠 Indoor
+            - generic [ref=e64]:
+              - generic [ref=e65]: ★
+              - generic [ref=e66]: "5.0"
+            - generic [ref=e68]: Bar
+            - link "View website →" [ref=e70]:
+              - /url: https://www.hotelfrantz.se/restaurang-och-barhttps://www.hotelruth.se/restaurang-och-bar?utm_source=google&utm_medium=organic&utm_campaign=google-business-profile-restaurant
+          - generic [ref=e72] [cursor=pointer]:
+            - generic [ref=e73]:
+              - heading "Pontus Frithiof La Tour" [level=3] [ref=e74]
+              - generic [ref=e75]: DUAL
+            - paragraph [ref=e76]: Rålambsvägen 17, 112 59 Stockholm, Sweden
+            - generic [ref=e77]:
+              - generic [ref=e78]: 🪑 Outdoor
+              - generic [ref=e79]: 🏠 Indoor
+            - generic [ref=e80]:
+              - generic [ref=e81]:
+                - generic [ref=e82]: ★
+                - generic [ref=e83]: "4.9"
+              - generic [ref=e84]: ●●●●●
+            - generic [ref=e86]: Bar
+            - link "View website →" [ref=e88]:
+              - /url: http://latourbypontus.com/
+  - alert [ref=e32]: /search?q=restaurant&type=terrace&sun=sunny&view=list

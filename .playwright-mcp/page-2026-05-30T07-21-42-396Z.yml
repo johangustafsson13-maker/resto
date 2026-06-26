@@ -1,0 +1,15 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e5]:
+      - button "← RESTO" [ref=e6] [cursor=pointer]
+      - textbox "Search restaurants, terraces, neighborhoods..." [ref=e8]: restaurant
+    - generic [ref=e9]:
+      - button "Filters ▼" [ref=e11] [cursor=pointer]:
+        - generic [ref=e12]: Filters
+        - generic [ref=e13]: ▼
+      - generic [ref=e14]:
+        - generic [ref=e17]:
+          - button "Map" [ref=e18] [cursor=pointer]
+          - button "List" [ref=e19] [cursor=pointer]
+        - generic [ref=e21]: Searching…
+  - alert [ref=e22]

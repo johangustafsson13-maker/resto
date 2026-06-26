@@ -33,35 +33,26 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * c
 }
 
-// Calculate shadow polygon for a building footprint
-// Projects building shadow based on sun position
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function projectShadowPolygon(
-  footprint: number[][],
+// Compute the shadow offset vector (in degrees) for a given building height and sun position.
+// Returns [offsetLng, offsetLat] — the displacement from building base to shadow tip.
+function computeShadowOffset(
   buildingHeight: number,
   sunAzimuth: number,
   sunAltitude: number,
-  centerLat: number
-): number[][] {
-  if (sunAltitude <= 0) return [] // No shadows at night
+): [number, number] {
+  if (sunAltitude <= 0) return [0, 0]
 
-  // Calculate shadow length (in degrees) based on sun altitude and building height
-  // Using approximation: shadow_distance ≈ building_height / tan(altitude)
-  const shadowLength = buildingHeight / Math.tan(sunAltitude) / 111000 // 111km ≈ 1 degree lat
+  // shadow_distance = height / tan(altitude), converted from metres to degrees
+  const shadowLength = buildingHeight / Math.tan(sunAltitude) / 111000
 
-  // Convert azimuth from radians (south=0, clockwise) to bearing (north=0, clockwise)
+  // sunAzimuth: south=0, clockwise in radians. Shadow falls opposite the sun.
   const bearing = (sunAzimuth * 180 / Math.PI + 180) % 360
-  const bearingRad = (bearing - 90) * Math.PI / 180 // Convert to standard math convention
+  const bearingRad = (bearing - 90) * Math.PI / 180
 
-  // Offset for shadow (opposite direction of sun)
-  const shadowOffsetLng = Math.cos(bearingRad) * shadowLength
-  const shadowOffsetLat = Math.sin(bearingRad) * shadowLength
-
-  // Project each point away from the sun (add offset — bearingRad already points away from sun)
-  return footprint.map(([lng, lat]) => [
-    lng + shadowOffsetLng,
-    lat + shadowOffsetLat,
-  ])
+  return [
+    Math.cos(bearingRad) * shadowLength,
+    Math.sin(bearingRad) * shadowLength,
+  ]
 }
 
 // Generate GeoJSON shadow features from map buildings
@@ -94,82 +85,48 @@ function generateShadowFeatures(
       const geometry = building.geometry
 
       if (geometry && geometry.type === 'Polygon') {
-        const footprint = geometry.coordinates[0]
-        const shadowProjection = projectShadowPolygon(
-          footprint,
-          height,
-          sunAzimuth,
-          sunAltitude,
-          centerLat
-        )
+        const footprint: number[][] = geometry.coordinates[0]
+        if (!Array.isArray(footprint) || footprint.length < 3) return
 
-        if (shadowProjection.length > 3) {
-          try {
-            // Validate polygons before processing
-            if (!Array.isArray(footprint) || footprint.length < 3) {
-              if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
-                console.warn('[Shadow] Invalid building footprint, skipping')
-              }
-              return
-            }
-            if (!Array.isArray(shadowProjection) || shadowProjection.length < 3) {
-              if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
-                console.warn('[Shadow] Invalid shadow projection, skipping')
-              }
-              return
-            }
+        const [offsetLng, offsetLat] = computeShadowOffset(height, sunAzimuth, sunAltitude)
+        if (offsetLng === 0 && offsetLat === 0) return
 
-            // Ensure coordinates are properly closed (first point = last point)
-            const closedFootprint = footprint[footprint.length - 1] === footprint[0] ? footprint : [...footprint, footprint[0]]
-            const closedShadow = shadowProjection[shadowProjection.length - 1] === shadowProjection[0] ? shadowProjection : [...shadowProjection, shadowProjection[0]]
+        try {
+          // Shadow tip points: each footprint vertex shifted in the shadow direction
+          const shadowTips = footprint.map(([lng, lat]) => [lng + offsetLng, lat + offsetLat])
 
-            // Create Turf polygon objects
-            const buildingFootprint = turf.polygon([closedFootprint])
-            const shadowPoly = turf.polygon([closedShadow])
+          // Build the swept shadow polygon as the convex hull of footprint + shadow tips.
+          // This guarantees the shadow is ATTACHED to the building — no floating.
+          const allPoints = turf.featureCollection(
+            [...footprint, ...shadowTips].map(p => turf.point(p as [number, number]))
+          )
+          const hull = turf.convex(allPoints)
+          if (!hull) return
 
-            // Subtract building footprint from shadow polygon
-            // Result is the shadow area that's OUTSIDE the building
-            const shadowMinusBuilding = turf.difference(shadowPoly, buildingFootprint)
+          // Ensure footprint polygon is closed
+          const closedFootprint = footprint[footprint.length - 1][0] === footprint[0][0] &&
+                                  footprint[footprint.length - 1][1] === footprint[0][1]
+            ? footprint : [...footprint, footprint[0]]
 
-            if (shadowMinusBuilding && shadowMinusBuilding.geometry) {
-              const altitudeDeg = sunAltitude * 180 / Math.PI
-              const opacityBase = Math.sin(sunAltitude)
-              const opacity = Math.max(0.15, Math.min(0.6, opacityBase * 0.7))
+          const buildingPoly = turf.polygon([closedFootprint])
 
-              // Only add if geometry is valid and has area
-              if (shadowMinusBuilding.geometry.type === 'Polygon' || shadowMinusBuilding.geometry.type === 'MultiPolygon') {
-                features.push({
-                  type: 'Feature',
-                  geometry: shadowMinusBuilding.geometry,
-                  properties: {
-                    height,
-                    opacity,
-                    altitude: altitudeDeg,
-                  },
-                })
+          // Subtract the building itself — show only the ground shadow outside the building
+          const shadowOnly = turf.difference(hull, buildingPoly)
+          if (!shadowOnly?.geometry) return
 
-                if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
-                  console.log('[Shadow] Successfully subtracted building from shadow')
-                }
-              } else {
-                if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
-                  console.warn('[Shadow] Difference result has invalid geometry type:', shadowMinusBuilding.geometry.type)
-                }
-              }
-            } else {
-              if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
-                console.warn('[Shadow] Difference returned no geometry')
-              }
-            }
-          } catch (diffError) {
-            if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
-              console.warn('[Shadow] Polygon difference failed:', diffError)
-              console.warn('[Shadow] Skipping this shadow (not rendering full shadow to avoid covering building)')
-            }
-            // NOTE: We skip this shadow rather than using the full shadow
-            // This prevents buildings from being covered when difference fails
-            return
+          const opacityBase = Math.sin(sunAltitude)
+          const opacity = Math.max(0.15, Math.min(0.6, opacityBase * 0.7))
+
+          if (shadowOnly.geometry.type === 'Polygon' || shadowOnly.geometry.type === 'MultiPolygon') {
+            features.push({
+              type: 'Feature',
+              geometry: shadowOnly.geometry,
+              properties: { height, opacity, altitude: sunAltitude * 180 / Math.PI },
+            })
           }
+        } catch {
+          // Skip malformed building geometry silently
+          return
         }
       }
     })
@@ -266,7 +223,8 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
     mapRef.current = map
 
     map.once('load', () => {
-      // Request user's location and center map on it (after map is fully loaded)
+      // Temporarily disabled for browse endpoint testing
+      /*
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
@@ -308,6 +266,7 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
           }
         )
       }
+      */
       // Add ground shadows source
       map.addSource('shadow-source', {
         type: 'geojson',

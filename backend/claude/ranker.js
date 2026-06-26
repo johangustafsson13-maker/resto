@@ -73,9 +73,11 @@ const formatVenueForRanking = (venue) => {
 `;
 };
 
-const formatIntentForRanking = (intent) => {
+const formatIntentForRanking = (intent, originalQuery) => {
   return `
-User's Intent:
+User's search: "${originalQuery || ''}"
+Parsed intent:
+- Cuisine wanted: ${intent.cuisine?.length ? intent.cuisine.join(', ') : 'Any'}
 - Location: ${intent.location || 'Anywhere in Stockholm'}
 - Time: ${intent.time || 'Anytime'}
 - Ambiance: ${intent.ambiance?.length ? intent.ambiance.join(', ') : 'Any'}

@@ -1,0 +1,55 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - button "← RESTO" [ref=e6] [cursor=pointer]
+        - textbox "Search restaurants, terraces, neighborhoods..." [ref=e8]: restaurant
+      - paragraph [ref=e35]:
+        - text: 5 venues for
+        - generic [ref=e36]: "\"restaurant\""
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - paragraph [ref=e11]: Filters
+        - paragraph [ref=e12]: 5 venues
+        - generic [ref=e13]:
+          - paragraph [ref=e14]: Type
+          - generic [ref=e15]:
+            - button "🍽️Restaurants" [ref=e16] [cursor=pointer]
+            - button "☀️Terraces" [ref=e17] [cursor=pointer]
+            - button "✦All Venues" [ref=e18] [cursor=pointer]
+        - generic [ref=e19]:
+          - paragraph [ref=e20]: Sunlight
+          - generic [ref=e21]:
+            - button "Any" [ref=e22] [cursor=pointer]
+            - button "☀️ Sunny" [ref=e23] [cursor=pointer]
+            - button "🌳 Shaded" [ref=e24] [cursor=pointer]
+      - generic [ref=e25]:
+        - generic [ref=e28]:
+          - button "Map" [ref=e29] [cursor=pointer]
+          - button "List" [ref=e30] [cursor=pointer]
+        - generic [ref=e37]:
+          - generic [ref=e38]:
+            - region "Map" [ref=e39]
+            - generic [ref=e40]:
+              - generic [ref=e41]:
+                - button "+" [ref=e42] [cursor=pointer]
+                - button "−" [ref=e43] [cursor=pointer]
+              - button "3D" [ref=e44] [cursor=pointer]
+          - generic [ref=e45]:
+            - generic:
+              - generic:
+                - link "Mapbox logo":
+                  - /url: https://www.mapbox.com/
+            - generic [ref=e47]:
+              - button "Toggle attribution"
+              - list [ref=e48]:
+                - link "Mapbox" [ref=e49] [cursor=pointer]:
+                  - /url: https://www.mapbox.com/about/maps
+                  - text: © Mapbox
+                - link "OpenStreetMap" [ref=e50] [cursor=pointer]:
+                  - /url: https://www.openstreetmap.org/copyright/
+                  - text: © OpenStreetMap
+                - link "Map feedback" [ref=e51] [cursor=pointer]:
+                  - /url: https://apps.mapbox.com/feedback/?owner=mapbox&id=light-v11&access_token=pk.eyJ1Ijoiam9oYW5nc3NvbiIsImEiOiJjbW5yanRqb2kwMnNtMnFzNm1ueG03ZXV0In0.ICtGc5iAavLZS3UkA_dJjA#/18.04507/59.32986/13.25
+                  - text: Improve this map
+  - alert [ref=e33]

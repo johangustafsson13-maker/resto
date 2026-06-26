@@ -1,0 +1,55 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e18]:
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - button "← RESTO" [ref=e21] [cursor=pointer]
+        - textbox "Search restaurants, terraces, neighborhoods..." [ref=e23]: restaurant Östermalm
+      - paragraph [ref=e25]:
+        - text: 5 venues for
+        - generic [ref=e26]: "\"restaurant Östermalm\""
+    - generic [ref=e27]:
+      - generic [ref=e28]:
+        - paragraph [ref=e29]: Filters
+        - paragraph [ref=e30]: 5 venues
+        - generic [ref=e31]:
+          - paragraph [ref=e32]: Type
+          - generic [ref=e33]:
+            - button "🍽️Restaurants" [ref=e34] [cursor=pointer]
+            - button "☀️Terraces" [ref=e35] [cursor=pointer]
+            - button "✦All Venues" [ref=e36] [cursor=pointer]
+        - generic [ref=e37]:
+          - paragraph [ref=e38]: Sunlight
+          - generic [ref=e39]:
+            - button "Any" [ref=e40] [cursor=pointer]
+            - button "☀️ Sunny" [ref=e41] [cursor=pointer]
+            - button "🌳 Shaded" [ref=e42] [cursor=pointer]
+      - generic [ref=e43]:
+        - generic [ref=e46]:
+          - button "Map" [ref=e47] [cursor=pointer]
+          - button "List" [ref=e48] [cursor=pointer]
+        - generic [ref=e50]:
+          - generic [ref=e51]:
+            - region "Map" [ref=e52]
+            - generic [ref=e53]:
+              - generic [ref=e54]:
+                - button "+" [ref=e55] [cursor=pointer]
+                - button "−" [ref=e56] [cursor=pointer]
+              - button "3D" [ref=e57] [cursor=pointer]
+          - generic [ref=e58]:
+            - generic:
+              - generic:
+                - link "Mapbox logo":
+                  - /url: https://www.mapbox.com/
+            - generic [ref=e60]:
+              - button "Toggle attribution"
+              - list [ref=e61]:
+                - link "Mapbox" [ref=e62] [cursor=pointer]:
+                  - /url: https://www.mapbox.com/about/maps
+                  - text: © Mapbox
+                - link "OpenStreetMap" [ref=e63] [cursor=pointer]:
+                  - /url: https://www.openstreetmap.org/copyright/
+                  - text: © OpenStreetMap
+                - link "Map feedback" [ref=e64] [cursor=pointer]:
+                  - /url: https://apps.mapbox.com/feedback/?owner=mapbox&id=dark-v11&access_token=pk.eyJ1Ijoiam9oYW5nc3NvbiIsImEiOiJjbW5yanRqb2kwMnNtMnFzNm1ueG03ZXV0In0.ICtGc5iAavLZS3UkA_dJjA#/18.06118/59.32986/12.37
+                  - text: Improve this map
+  - alert [ref=e17]: /search?q=restaurant%20%C3%96stermalm

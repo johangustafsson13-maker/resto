@@ -117,13 +117,6 @@ async function fetchCandidates(intent, query, type = 'both', filters = {}) {
     filterClauses.push('AND outdoor_seating = true');
   }
 
-  if (filters.cuisine && Array.isArray(filters.cuisine) && filters.cuisine.length > 0) {
-    // Use array overlap operator for cuisine tags
-    const paramIndex = 6 + filterParams.length;
-    filterClauses.push(`AND cuisine_tags && $${paramIndex}`);
-    filterParams.push(filters.cuisine);
-  }
-
   const filterSQL = filterClauses.join(' ');
 
   const params = [
@@ -151,29 +144,19 @@ async function fetchCandidates(intent, query, type = 'both', filters = {}) {
     params
   );
 
-  // Post-process: prioritize by cuisine if specified
-  const queryLower = (query || '').toLowerCase();
-  const cuisineKeywords = {
-    'coffee': ['café', 'coffee', 'kahve', 'cafe'],
-    'burger': ['burger', 'beef'],
-    'pizza': ['pizza', 'italian'],
-    'thai': ['thai'],
-    'indian': ['indian'],
-    'sushi': ['sushi', 'japanese'],
-    'mexican': ['mexican'],
-  };
-
-  for (const [keyword, cuisines] of Object.entries(cuisineKeywords)) {
-    if (queryLower.includes(keyword)) {
-      // Separate matching and non-matching venues
-      const matching = candidates.filter(v =>
-        v.cuisine_tags && v.cuisine_tags.some(tag =>
-          cuisines.some(c => tag.toLowerCase().includes(c))
-        )
-      );
-      // Return matching first, then others
-      return [...matching, ...candidates.filter(v => !matching.includes(v))];
-    }
+  // If cuisine was specified in intent, bubble matching venues to the top
+  // so Claude sees the most relevant candidates first (it only sees top 30)
+  const cuisineFromIntent = intent.cuisine && intent.cuisine.length > 0 ? intent.cuisine : null;
+  if (cuisineFromIntent) {
+    const lowerCuisines = cuisineFromIntent.map(c => c.toLowerCase());
+    const matching = candidates.filter(v =>
+      v.cuisine_tags && v.cuisine_tags.some(tag =>
+        lowerCuisines.some(c => tag.toLowerCase().includes(c))
+      )
+    );
+    const rest = candidates.filter(v => !matching.includes(v));
+    console.log(`[search] cuisine filter [${cuisineFromIntent}]: ${matching.length} matches + ${rest.length} others`);
+    return [...matching, ...rest];
   }
 
   return candidates;
@@ -181,34 +164,43 @@ async function fetchCandidates(intent, query, type = 'both', filters = {}) {
 
 // ─── Step 3: Rank via Claude ──────────────────────────────────────────────────
 
-async function rankCandidates(venues, intent, topN) {
-  // Prefix each venue with its DB id so Claude can reference it unambiguously
-  const venuesText = venues
+async function rankCandidates(venues, intent, topN, originalQuery) {
+  const intentText = formatIntentForRanking(intent, originalQuery);
+
+  // Only send top 30 candidates to Claude — keeps prompt small and response fast
+  const candidateSlice = venues.slice(0, 30);
+  const venuesTextSliced = candidateSlice
     .map((v, i) => `${i + 1}. (venue_id: ${v.id})\n${formatVenueForRanking(v)}`)
     .join('\n');
-  const intentText = formatIntentForRanking(intent);
 
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 1500,
+    max_tokens: 2048,
     system: [{ type: 'text', text: RANKING_SYSTEM, cache_control: { type: 'ephemeral' } }],
-    messages: [{ role: 'user', content: `${intentText}\n\nRestaurants to rank:\n${venuesText}` }],
+    messages: [{ role: 'user', content: `${intentText}\n\nRestaurants to rank:\n${venuesTextSliced}` }],
   });
 
-  const { ranked } = parseClaudeJSON(response.content[0].text);
+  const raw = response.content[0].text;
+  const { ranked } = parseClaudeJSON(raw);
 
-  const byId = new Map(venues.map(v => [v.id, v]));
+  const byId = new Map(candidateSlice.map(v => [v.id, v]));
 
-  return ranked
+  const results = ranked
     .slice(0, topN)
     .map(r => {
-      // Claude may return venue_id as number or string
       const rawId = r.venue_id ?? r.id;
-      const venue = byId.get(typeof rawId === 'string' ? parseInt(rawId, 10) : rawId);
-      if (!venue) return null;
+      const id = typeof rawId === 'string' ? parseInt(rawId, 10) : rawId;
+      const venue = byId.get(id);
+      if (!venue) {
+        console.warn(`[rank] Claude returned unknown venue_id ${rawId} — skipping`);
+        return null;
+      }
       return buildResponseVenue(venue, r.explanation);
     })
     .filter(Boolean);
+
+  console.log(`[rank] Claude ranked ${ranked.length} venues → returning ${results.length}`);
+  return results;
 }
 
 function buildResponseVenue(v, explanation = null) {
@@ -323,6 +315,7 @@ async function handler(req, res, next) {
     let intent;
     try {
       intent = await parseQueryIntent(trimmed);
+      console.log(`[search] intent: location=${intent.location} cuisine=${JSON.stringify(intent.cuisine)} time=${intent.time}`);
     } catch (err) {
       console.error('[search] intent parse failed:', err.message);
       return res.status(500).json({ error: 'Failed to parse search intent' });
@@ -353,48 +346,23 @@ async function handler(req, res, next) {
       return res.status(500).json({ error: 'Database error' });
     }
 
+    console.log(`[search] candidates: ${candidates.length} venues (top: ${candidates.slice(0,3).map(v => v.name).join(', ')})`);
+
     if (candidates.length === 0) {
       return res.json({ query: trimmed, intent, venues: [] });
     }
 
-    // 3. Filter by cuisine and return top-rated venues (simple, reliable approach)
-    const queryLower = trimmed.toLowerCase();
-    const cuisineKeywords = {
-      'coffee': ['café', 'coffee', 'kahve', 'cafe'],
-      'burger': ['burger', 'beef'],
-      'pizza': ['pizza', 'italian'],
-      'thai': ['thai'],
-      'indian': ['indian'],
-      'sushi': ['sushi', 'japanese'],
-      'mexican': ['mexican'],
-    };
-
-    let venues = candidates;
-    for (const [keyword, cuisines] of Object.entries(cuisineKeywords)) {
-      if (queryLower.includes(keyword)) {
-        const matching = candidates.filter(v =>
-          v.cuisine_tags && v.cuisine_tags.some(tag =>
-            cuisines.some(c => tag.toLowerCase().includes(c))
-          )
-        );
-
-        console.log(`[search] Query: "${trimmed}"`);
-        console.log(`[search] Looking for cuisines: ${cuisines.join(', ')}`);
-        console.log(`[search] Candidates: ${candidates.map(c => `${c.name} (${c.cuisine_tags})`).join(' | ')}`);
-        console.log(`[search] Matching: ${matching.map(m => m.name).join(', ')}`);
-
-        // If we found matches, use ONLY those
-        if (matching.length > 0) {
-          venues = matching;
-        }
-        break;
-      }
+    // 3. Rank candidates via Claude
+    let venues;
+    try {
+      venues = await rankCandidates(candidates, intent, topN, trimmed);
+    } catch (err) {
+      console.error('[search] Claude ranking failed, falling back to rating sort:', err.message);
+      // Graceful fallback: return top-rated candidates with a generic explanation
+      venues = candidates
+        .slice(0, topN)
+        .map(v => buildResponseVenue(v, null));
     }
-
-    // Return top venues sorted by rating
-    venues = venues
-      .slice(0, topN)
-      .map(v => buildResponseVenue(v, `${v.name} in ${intent.location || 'Stockholm'}`))
 
     // Write-through cache — fire-and-forget, never delays the response
     cache.setCached(key, venues, 3600);

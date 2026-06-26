@@ -1,0 +1,19 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - button "← RESTO" [ref=e6] [cursor=pointer]
+        - textbox "Search restaurants, terraces, neighborhoods..." [ref=e8]: restaurant
+      - paragraph [ref=e10]:
+        - text: 0 venues for
+        - generic [ref=e11]: "\"restaurant\""
+    - generic [ref=e12]:
+      - button "Filters ▼" [ref=e14] [cursor=pointer]:
+        - generic [ref=e15]: Filters
+        - generic [ref=e16]: ▼
+      - generic [ref=e17]:
+        - generic [ref=e20]:
+          - button "Map" [ref=e21] [cursor=pointer]
+          - button "List" [ref=e22] [cursor=pointer]
+        - generic [ref=e24]: Search failed
+  - alert [ref=e25]
