@@ -1,264 +1,155 @@
-# Resto: AI Restaurant Finder
+# Resto: AI Restaurant & Terrace Finder (Stockholm)
 
-An AI-powered restaurant discovery app that uses Claude to understand natural language queries, rank venues intelligently, and analyze sentiment from reviews.
+Resto is an AI-powered venue-discovery app for Stockholm. You ask in plain language
+("cozy lunch near Södermalm, under 300 SEK") and Claude parses the intent, the backend
+filters a database of ~1,400 scraped venues, and Claude ranks the best matches with a
+short explanation for each. Results render on a Mapbox map.
 
-**Target:** Launch MVP in Stockholm in 3 weeks. $5-50k/month by month 3.
+Its signature feature is a **real-time sun/shadow visualization**: using the sun's
+position (SunCalc) and building footprints/heights from Mapbox, the map shades occluded
+ground and marks terraces as in-sun or in-shade *right now* — with a time scrubber to
+see how shadows move through the day.
 
-## Quick Start
+> Status: working MVP, deployed. Some advertised-but-unbuilt pieces are flagged below
+> under "Known gaps / not yet implemented." Read that section before relying on a feature.
 
-### Prerequisites
-- Node.js 18+
-- PostgreSQL 12+
-- npm or yarn
+## Live deployments
 
-### Setup
+- **Frontend (Vercel):** https://resto-sable-omega.vercel.app
+- **Backend (Railway):** https://resto-production-9b86.up.railway.app
+- **Database:** Supabase Postgres
 
-1. **Clone and install:**
-```bash
-cd backend && npm install
-cd ../frontend && npm install
-cd ..
-```
+## Tech stack
 
-2. **Configure environment variables:**
-   - Copy `backend/.env.example` to `backend/.env`
-   - Copy `frontend/.env.example` to `frontend/.env`
-   - Add your API keys (see below)
-
-3. **Set up database:**
-```bash
-# Create PostgreSQL database
-createdb resto_dev
-
-# Load schema
-psql -U postgres -d resto_dev -f backend/db/schema.sql
-```
-
-4. **Start development servers:**
-```bash
-# Terminal 1 - Backend
-cd backend && npm run dev
-
-# Terminal 2 - Frontend
-cd frontend && npm run dev
-```
-
-Backend runs on `http://localhost:3001`
-Frontend runs on `http://localhost:3000`
+- **Frontend:** Next.js 14 (pages router) + React 18 + TypeScript, Mapbox GL, SunCalc,
+  @turf/turf (shadow geometry). Styling is mostly inline + a Tailwind config.
+- **Backend:** Node.js + Express, pg-promise (Postgres), `@anthropic-ai/sdk`.
+- **AI:** Claude (`claude-sonnet-4-6`) for intent parsing and ranking.
+- **Data:** Google Places scraper (`backend/scrapers/google-maps.js`).
+- **Hosting:** Vercel (frontend) + Railway (backend) + Supabase (Postgres).
 
 ## Architecture
 
-### Tech Stack
-- **Backend:** Node.js + Express
-- **Frontend:** Next.js + React + Tailwind CSS
-- **Database:** PostgreSQL
-- **Maps:** Mapbox GL
-- **AI:** Claude API (Sonnet)
-- **Hosting:** Vercel (frontend) + DigitalOcean (backend)
-
-### Core Components
-
-**Backend:**
-- `/scrapers` — Data collection (Google Maps, OpenTable, etc.)
-- `/api` — Express endpoints (/search, /parse-intent, /rank)
-- `/db` — PostgreSQL schema and migrations
-- `/claude` — Claude API integration (intent parsing, ranking, sentiment analysis)
-
-**Frontend:**
-- `/pages` — Next.js routes (search, venue details)
-- `/components` — React components (SearchBox, VenueMap, VenueCard)
-- `/hooks` — Custom React hooks
-- `/styles` — Tailwind CSS
-
-### Data Flow
-
-1. User types natural language query ("best lunch near Stureplan for business meeting under 200 SEK")
-2. Frontend sends to `/parse-intent` endpoint
-3. Backend uses Claude to extract: location, time, cuisine, budget, party size, ambiance
-4. Backend filters venues from PostgreSQL using intent
-5. Backend uses Claude to rank results by relevance to user's criteria
-6. Backend sends top 5 venues + Claude explanations to frontend
-7. Frontend displays results on Mapbox with venue details
-
-## API Endpoints
-
-### `/search` (POST)
-Search for restaurants by query.
-
-**Request:**
-```json
-{
-  "query": "cozy lunch near Södermalm, under 300 SEK",
-  "userId": "user123",
-  "limit": 5
-}
+```
+backend/
+  server.js            Express app + route wiring
+  api/                 search.js (main flow), browse.js (public map), auth.js
+  claude/              intent-parser.js, ranker.js (prompts), sentiment-analyzer.js*
+  db/                  index.js (pg-promise), schema.sql
+  middleware/          auth.js (JWT), rateLimit.js
+  scrapers/            google-maps.js + enrichment scripts
+  migrations/          incremental schema changes (see Database below)
+frontend/
+  pages/               index.tsx (map + search), auth/, api/search.ts (proxy)
+  components/          VenueMap.tsx (shadow engine), TimeScrubber, ResultsList, ...
+  lib/                 auth.ts, sunScore.ts, theme.ts
 ```
 
-**Response:**
-```json
-{
-  "venues": [
-    {
-      "id": 1,
-      "name": "Restaurant Name",
-      "address": "Street 123, Södermalm",
-      "lat": 59.32,
-      "lng": 18.07,
-      "cuisine_tags": ["Swedish", "Modern"],
-      "price_range": 2,
-      "rating": 4.5,
-      "explanation": "Claude's explanation of why this matches your query"
-    }
-  ]
-}
+`*` `sentiment-analyzer.js` is a prompt module that is not wired into any route yet.
+
+## How it works (data flow)
+
+1. **Default map** — on load the frontend calls `GET /api/browse`, which returns
+   top-rated venues straight from Postgres (no Claude call, no auth).
+2. **Search** — typing a query (requires a logged-in user) POSTs to the Next.js proxy
+   `/api/search`, which forwards to the backend `POST /api/search`. The backend:
+   a. parses the query into structured intent via Claude (`claude/intent-parser.js`),
+   b. filters candidate venues from Postgres (neighborhood bounding box, cuisine hard
+      filter, budget → price range),
+   c. ranks the top candidates via Claude (`claude/ranker.js`) and returns venues +
+      one-line explanations. Falls back to rating-sort if the Claude call fails.
+3. **Sun/shadow** — independently, `VenueMap.tsx` computes shadows client-side and marks
+   terraces sun/shade; `TimeScrubber` re-runs the calculation for any time of day.
+
+## API endpoints
+
+| Method | Path                | Auth | Notes |
+|--------|---------------------|------|-------|
+| GET    | `/health`           | no   | Liveness check |
+| GET    | `/api/browse`       | no   | Top-rated venues for the default map. `?type=&limit=` |
+| POST   | `/api/search`       | JWT  | Full intent→filter→rank flow. Body: `{ query, type?, limit? }` |
+| POST   | `/api/auth/signup`  | no   | `{ email, password }` → `{ user, token }` |
+| POST   | `/api/auth/login`   | no   | `{ email, password }` → `{ user, token }` |
+
+Auth is email/password with bcrypt hashing and a 7-day JWT (`Authorization: Bearer …`).
+
+## Quick start (local)
+
+Prerequisites: Node.js 20+, a Postgres database (or Supabase connection string).
+
+```bash
+# Backend
+cd backend && npm install
+cp .env.example .env          # fill in real values (see below)
+npm run dev                   # http://localhost:3001
+
+# Frontend (separate terminal)
+cd frontend && npm install
+cp .env.example .env.local    # set NEXT_PUBLIC_API_URL + NEXT_PUBLIC_MAPBOX_TOKEN
+npm run dev                   # http://localhost:3000
 ```
 
-### `/parse-intent` (POST)
-Parse natural language query into structured intent.
+## Database
 
-**Request:**
-```json
-{
-  "query": "best lunch spot near Stureplan for business meeting under 200 SEK"
-}
+The base tables live in `backend/db/schema.sql`. Incremental changes live in
+`backend/migrations/` and are applied with:
+
+```bash
+cd backend && npm run migrate   # runs run-migration.js
 ```
 
-**Response:**
-```json
-{
-  "location": "Stureplan",
-  "time": "lunch",
-  "ambiance": "business-friendly",
-  "budget": 200,
-  "party_size": null,
-  "dietary_restrictions": [],
-  "outdoor": false
-}
+Note: the `venues` table gained columns over time (`is_terrace`, `is_restaurant`,
+`indoor_seating`, `neighbourhood`, `outdoor_seats`, `orientation`, …) via the
+`migrations/` files, so `schema.sql` alone is not the full picture. Consolidating these
+into a single authoritative schema is a tracked cleanup item.
+
+## Environment variables
+
+**Backend (`backend/.env`)** — never commit this file; only `.env.example` is tracked.
+
 ```
-
-### `/rank` (POST)
-Rank venues by relevance to intent.
-
-**Request:**
-```json
-{
-  "venues": [...],
-  "intent": {...}
-}
-```
-
-**Response:**
-```json
-{
-  "ranked": [
-    {
-      "id": 1,
-      "score": 0.95,
-      "explanation": "Matches all your criteria: business-friendly ambiance, near Stureplan, excellent for lunch..."
-    }
-  ]
-}
-```
-
-## Environment Variables
-
-### Backend (`backend/.env`)
-```
-NODE_ENV=development
+NODE_ENV=production
 PORT=3001
-
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/resto_dev
-
-# Claude API
+DATABASE_URL=postgresql://...        # Supabase Postgres
 ANTHROPIC_API_KEY=sk-ant-...
-
-# Mapbox
-MAPBOX_TOKEN=pk_test_...
-
-# Redis (optional, for caching)
-REDIS_URL=redis://localhost:6379
-
-# External APIs
-GOOGLE_MAPS_API_KEY=...
-OPENAPI_KEY=...
+MAPBOX_TOKEN=pk....
+GOOGLE_MAPS_API_KEY=...              # scraper only
+JWT_SECRET=<long random string>      # use a strong secret in production
+ALLOWED_ORIGINS=https://resto-sable-omega.vercel.app
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_WINDOW_MS=60000
+RATE_LIMIT_MAX_REQUESTS=5
+REDIS_ENABLED=false                  # optional response cache
 ```
 
-### Frontend (`frontend/.env.local`)
+**Frontend (`frontend/.env.local`)**
+
 ```
-NEXT_PUBLIC_API_URL=http://localhost:3001
-NEXT_PUBLIC_MAPBOX_TOKEN=pk_test_...
+NEXT_PUBLIC_API_URL=https://resto-production-9b86.up.railway.app
+NEXT_PUBLIC_MAPBOX_TOKEN=pk....
 ```
-
-## Development Workflow
-
-### Week 1: Backend + Data
-- [ ] Google Maps scraper for 500 Stockholm restaurants
-- [ ] PostgreSQL schema (venues, reviews, queries)
-- [ ] Express API: /search, /parse-intent, /rank
-- [ ] Claude integration: intent parsing + ranking
-- [ ] Local testing via CLI
-
-### Week 2: Frontend
-- [ ] Next.js search app with Mapbox integration
-- [ ] Display top 5 results with Claude explanations
-- [ ] Venue detail pages (hours, reviews, booking links)
-- [ ] Mobile responsive design
-
-### Week 3: Launch
-- [ ] Redis caching + rate limiting
-- [ ] Freemium auth (email signup, JWT)
-- [ ] Analytics tracking
-- [ ] Deploy to Vercel + DigitalOcean
-- [ ] Product Hunt submission
-
-## Documentation
-
-- **[API.md](docs/API.md)** — Detailed API documentation
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** — System architecture & design decisions
-- **[DATA_SOURCES.md](docs/DATA_SOURCES.md)** — Data collection strategy
 
 ## Scripts
 
-### Backend
-```bash
-npm run dev          # Start development server with nodemon
-npm run build        # Build for production
-npm start            # Run production build
-npm run migrate      # Run database migrations
-npm run seed         # Load test data
-npm run scrape       # Run Google Maps scraper
-```
+Backend: `npm run dev` · `npm start` · `npm run migrate` · `npm run scrape`
+Frontend: `npm run dev` · `npm run build` · `npm start` · `npm run lint` · `npm run type-check`
 
-### Frontend
-```bash
-npm run dev          # Start Next.js dev server
-npm run build        # Build for production
-npm start            # Run production build
-npm run lint         # Lint code
-```
+## Known gaps / not yet implemented
 
-## Success Metrics
+These are advertised or scaffolded but **not** currently functional — be aware before
+relying on them:
 
-- **Week 1-2:** 100 beta testers, 1000+ searches
-- **Week 3:** Product Hunt top 50, 500+ newsletter signups, 5k MAU
-- **Month 2:** 50 paid subscribers, $150/month MRR
-- **Month 3:** 500 paid subscribers, $1,500/month MRR
-
-## Cost Estimate (MVP)
-
-- Claude API: $20-50/month
-- PostgreSQL (AWS RDS): $15/month
-- Redis: $5/month
-- Mapbox: Free tier
-- DigitalOcean: $5/month
-- Vercel: Free
-- **Total:** ~$50-75/month
+- **Freemium quota / billing.** The `users` table tracks `searches_remaining` and
+  `subscription_status`, but quota enforcement and decrement are currently commented out
+  in `api/search.js` — searches are effectively unlimited once logged in.
+- **Sentiment analysis.** `claude/sentiment-analyzer.js` exists and reviews are scraped,
+  but nothing runs the analyzer; the `reviews` sentiment columns are never populated.
+- **Analytics.** The `search_queries` table is defined but never written to.
+- **Response cache.** Redis caching code exists but is disabled in `api/search.js`.
+- **Row-Level Security.** `rls_policies.sql` targets Supabase Auth (`auth.uid()`), but the
+  app uses its own JWT auth over a privileged DB connection that bypasses RLS — the
+  policies are not the effective access-control layer.
 
 ## License
 
-MIT
-
-## Contact
-
-Johan Gustafsson (johan.gustafsson13@gmail.com)
+MIT — Johan Gustafsson (johan.gustafsson13@gmail.com)

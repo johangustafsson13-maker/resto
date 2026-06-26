@@ -21,8 +21,9 @@ if (!enabled) {
     // When mounted at /api/, req.path is relative: /auth/signup, /auth/login.
     skip: (req) => req.path.startsWith('/auth/'),
 
-    keyGenerator: (req) =>
-      req.headers['x-forwarded-for']?.split(',')[0].trim() ?? req.ip,
+    // Key on req.ip. With `trust proxy` set in server.js, Express resolves req.ip
+    // from the proxy-supplied X-Forwarded-For to the real client. Do NOT read the
+    // raw XFF header here — clients can forge it and bypass the limit entirely.
 
     handler: (req, res) => {
       const resetTime  = req.rateLimit?.resetTime;

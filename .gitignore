@@ -46,3 +46,18 @@ Thumbs.db
 .claude.json
 docker-compose.yml
 .playwright-mcp/
+
+# Claude / tooling local settings
+.claude/
+
+# Vercel
+.vercel/
+
+# Next.js / TS build artifacts
+*.tsbuildinfo
+
+# Screenshots / scratch images committed to the repo root (keep them out of git)
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif

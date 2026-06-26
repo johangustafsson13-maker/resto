@@ -1,2 +1,24 @@
-.vercel
+# Vercel
+.vercel/
+
+# Env (never commit real secrets — only .env.example is tracked)
+.env
+.env.local
+.env*.local
 .env*
+
+# Dependencies & build
+node_modules/
+.next/
+
+# TS build info
+*.tsbuildinfo
+
+# Claude / tooling local settings
+.claude/
+
+# Playwright scratch
+.playwright-mcp/
+
+# OS
+.DS_Store

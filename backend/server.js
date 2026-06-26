@@ -6,6 +6,10 @@ const db = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust the first proxy hop (Railway/Vercel) so req.ip reflects the real client
+// and the rate limiter cannot be bypassed by spoofing X-Forwarded-For.
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(express.json());
 app.use(cors({
@@ -26,8 +30,9 @@ app.get('/health', (req, res) => {
 // API Routes
 const authMiddleware = require('./middleware/auth');
 app.post('/api/search', authMiddleware, require('./api/search'));
-app.post('/api/parse-intent', require('./api/parse-intent'));
-app.post('/api/rank', require('./api/rank'));
+// NOTE: /api/parse-intent and /api/rank were removed — they were unauthenticated
+// Claude-calling endpoints unused by the frontend (a cost-abuse vector). The real
+// flow runs entirely inside /api/search. See claude/intent-parser.js + claude/ranker.js.
 
 // Auth Routes (stub)
 app.post('/api/auth/signup', require('./api/auth'));

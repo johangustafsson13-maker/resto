@@ -7,10 +7,9 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "build": "echo 'No build step needed for Express'",
-    "migrate": "node db/migrate.js",
-    "seed": "node db/seed.js",
+    "migrate": "node run-migration.js",
     "scrape": "node scrapers/google-maps.js",
-    "test": "echo 'Tests coming soon'"
+    "test": "echo 'No tests yet' && exit 0"
   },
   "keywords": [
     "restaurant",

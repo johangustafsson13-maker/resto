@@ -4,6 +4,7 @@ const mapboxgl: any = typeof window !== 'undefined' ? require('mapbox-gl') : nul
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const turf: any = typeof window !== 'undefined' ? require('@turf/turf') : null
 import SunCalc from 'suncalc'
+import { useDialKit } from 'dialkit'
 import { getSunScore, isInShadow } from '../lib/sunScore'
 import { COLORS, BREAKPOINTS } from '../lib/theme'
 import type { Venue } from '../types'
@@ -57,11 +58,18 @@ function computeShadowOffset(
 
 // Generate GeoJSON shadow features from map buildings
 // IMPORTANT: Subtracts building footprints so shadows only appear outside buildings
+interface ShadowDialParams {
+  opacityMinFloor: number
+  opacityMaxCap: number
+  opacityMult: number
+}
+
 function generateShadowFeatures(
   map: any,
   sunAzimuth: number,
   sunAltitude: number,
-  centerLat: number
+  centerLat: number,
+  dialParams?: ShadowDialParams
 ): GeoJSON.FeatureCollection {
   const features: GeoJSON.Feature[] = []
 
@@ -115,7 +123,10 @@ function generateShadowFeatures(
           if (!shadowOnly?.geometry) return
 
           const opacityBase = Math.sin(sunAltitude)
-          const opacity = Math.max(0.15, Math.min(0.6, opacityBase * 0.7))
+          const minFloor = dialParams?.opacityMinFloor ?? 0.15
+          const maxCap   = dialParams?.opacityMaxCap   ?? 0.60
+          const mult     = dialParams?.opacityMult     ?? 0.70
+          const opacity = Math.max(minFloor, Math.min(maxCap, opacityBase * mult))
 
           if (shadowOnly.geometry.type === 'Polygon' || shadowOnly.geometry.type === 'MultiPolygon') {
             features.push({
@@ -146,7 +157,7 @@ function generateShadowFeatures(
 // SunCalc azimuth: radians from south, clockwise (south=0, west=π/2).
 // Mapbox setLight position[1]: degrees from north, clockwise (north=0, east=90).
 // Mapbox setLight position[2]: elevation in degrees above surface (0=horizon, 90=zenith).
-function applySunLight(map: any, lat: number, lng: number, atTime: Date) {
+function applySunLight(map: any, lat: number, lng: number, atTime: Date, dialParams?: ShadowDialParams) {
   const { altitude, azimuth } = SunCalc.getPosition(atTime, lat, lng)
   const mapboxAzimuth = ((azimuth * 180 / Math.PI) + 180) % 360
   const elevationDeg = altitude * 180 / Math.PI
@@ -169,7 +180,7 @@ function applySunLight(map: any, lat: number, lng: number, atTime: Date) {
   }
 
   // Update ground shadows only (removed 3D volume layer to avoid double shadows)
-  const shadowFeatures = generateShadowFeatures(map, azimuth, altitude, lat)
+  const shadowFeatures = generateShadowFeatures(map, azimuth, altitude, lat, dialParams)
   const shadowSource = map.getSource('shadow-source')
   if (shadowSource) {
     shadowSource.setData(shadowFeatures)
@@ -191,6 +202,33 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
     const [is3D, setIs3D] = useState(false)
     const scrubbedTimeRef = useRef<Date | undefined>(scrubbedTime)
     const shadowDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    // ── DialKit: live shadow tuning (dev only — hidden in production) ──────────
+    const dial = useDialKit('Shadows', {
+      color: '#6e82a5',
+      opacity: [0.25, 0.0, 1.0],
+      opacityMinFloor: [0.15, 0.0, 0.5],
+      opacityMaxCap:   [0.60, 0.1, 1.0],
+      opacityMult:     [0.70, 0.1, 2.0],
+      outlineOpacity:  [0.20, 0.0, 1.0],
+      buildings: {
+        color: '#bbbbbb',
+        opacity: [0.4, 0.0, 1.0],
+      },
+    })
+
+    // Sync dial changes → live mapbox layer paint (no reload needed)
+    useEffect(() => {
+      const map = mapRef.current
+      if (!map || !map.isStyleLoaded()) return
+      try {
+        map.setPaintProperty('ground-shadows', 'fill-color', dial.color)
+        map.setPaintProperty('ground-shadows', 'fill-opacity', dial.opacity)
+        map.setPaintProperty('ground-shadows-outline', 'line-opacity', dial.outlineOpacity)
+        map.setPaintProperty('sun-buildings', 'fill-extrusion-color', dial.buildings.color)
+        map.setPaintProperty('sun-buildings', 'fill-extrusion-opacity', dial.buildings.opacity)
+      } catch { /* map not ready yet */ }
+    }, [dial.color, dial.opacity, dial.outlineOpacity, dial.buildings.color, dial.buildings.opacity])
 
     // Expose flyTo method via ref
     useImperativeHandle(ref, () => ({
@@ -320,7 +358,7 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
       })
 
       // Apply sun light at scrubbed time if set, otherwise at current real time
-      applySunLight(map, 59.3293, 18.0686, scrubbedTimeRef.current ?? new Date())
+      applySunLight(map, 59.3293, 18.0686, scrubbedTimeRef.current ?? new Date(), dial)
 
       // Update shadows every 15 seconds as sun moves (reduced from 5s for performance)
       // Only recalculate when zoom is appropriate for shadow rendering (zoom >= 12)
@@ -328,7 +366,7 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
         if (scrubbedTimeRef.current !== undefined) return // user is scrubbing — don't auto-advance
         const zoom = map.getZoom()
         if (zoom >= 12) {
-          applySunLight(map, 59.3293, 18.0686, new Date())
+          applySunLight(map, 59.3293, 18.0686, new Date(), dial)
         }
       }, 15000)
 
@@ -524,7 +562,7 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
       if (shadowDebounceRef.current) clearTimeout(shadowDebounceRef.current)
       shadowDebounceRef.current = setTimeout(() => {
         const m = mapRef.current
-        if (m && m.loaded()) applySunLight(m, 59.3293, 18.0686, scrubbedTime)
+        if (m && m.loaded()) applySunLight(m, 59.3293, 18.0686, scrubbedTime, dial)
       }, 100)
       return () => {
         if (shadowDebounceRef.current) clearTimeout(shadowDebounceRef.current)
