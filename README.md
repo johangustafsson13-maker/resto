@@ -91,17 +91,19 @@ npm run dev                   # http://localhost:3000
 
 ## Database
 
-The base tables live in `backend/db/schema.sql`. Incremental changes live in
-`backend/migrations/` and are applied with:
+`backend/db/schema.sql` is the **single source of truth** — it reflects the full
+production schema (base tables + the unified-venue boolean flags + terrace columns,
+all consolidated). Stand up a fresh database with:
 
 ```bash
-cd backend && npm run migrate   # runs run-migration.js
+psql "$DATABASE_URL" -f backend/db/schema.sql      # tables + indexes
+psql "$DATABASE_URL" -f backend/rls_policies.sql   # row-level security
 ```
 
-Note: the `venues` table gained columns over time (`is_terrace`, `is_restaurant`,
-`indoor_seating`, `neighbourhood`, `outdoor_seats`, `orientation`, …) via the
-`migrations/` files, so `schema.sql` alone is not the full picture. Consolidating these
-into a single authoritative schema is a tracked cleanup item.
+The files in `backend/migrations/` are historical and partly superseded (003 was an
+abandoned `type`-enum redesign; 004 was replaced by 004_fixed). Don't treat them as
+the schema of record — `schema.sql` is. `npm run migrate` (`run-migration.js`) remains
+for re-applying the 004 venue changes against an older database if needed.
 
 ## Environment variables
 
@@ -146,9 +148,13 @@ relying on them:
   but nothing runs the analyzer; the `reviews` sentiment columns are never populated.
 - **Analytics.** The `search_queries` table is defined but never written to.
 - **Response cache.** Redis caching code exists but is disabled in `api/search.js`.
-- **Row-Level Security.** `rls_policies.sql` targets Supabase Auth (`auth.uid()`), but the
-  app uses its own JWT auth over a privileged DB connection that bypasses RLS — the
-  policies are not the effective access-control layer.
+- **Row-Level Security.** The app's effective access control is the Express backend
+  (bcrypt + JWT), which talks to Postgres over a privileged connection that bypasses
+  RLS — that backend is the trust boundary, by design. `rls_policies.sql` is now
+  **defense-in-depth** for the Supabase API-key surface: RLS is enabled on all tables,
+  with public read on venues/reviews and no access to users/search_queries. (The old
+  policies targeted Supabase Auth and referenced a non-existent column; they've been
+  rewritten — see the header in `rls_policies.sql`.)
 
 ## License
 
