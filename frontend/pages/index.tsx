@@ -128,7 +128,7 @@ export default function SearchPage() {
       }
     }
     run()
-  }, [router.isReady, searchQuery])
+  }, [router.isReady, searchQuery]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- URL writer: shallow push so filter changes don't re-trigger fetch ---
   const updateQuery = (updates: Partial<Record<'q' | 'type' | 'sun' | 'view', string>>) => {

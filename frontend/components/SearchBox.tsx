@@ -128,7 +128,7 @@ export default function SearchBox({ onSearch, loading = false }: SearchBoxProps)
 
         {/* Hint text */}
         <p style={{ fontSize: '12px', color: COLORS.text3, textAlign: 'left', margin: 0, fontWeight: 300 }}>
-          Try: "cozy coffee" • "sunny terrace" • "Södermalm"
+          {'Try: "cozy coffee" • "sunny terrace" • "Södermalm"'}
         </p>
       </div>
     </form>

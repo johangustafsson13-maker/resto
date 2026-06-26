@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react'
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// mapbox-gl touches `window` at import time, so load it lazily on the client only.
 const mapboxgl: any = typeof window !== 'undefined' ? require('mapbox-gl') : null
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const turf: any = typeof window !== 'undefined' ? require('@turf/turf') : null
 import SunCalc from 'suncalc'
 import { useDialKit } from 'dialkit'
 import { getSunScore, isInShadow } from '../lib/sunScore'
 import { COLORS, BREAKPOINTS } from '../lib/theme'
 import type { Venue } from '../types'
+import { buildShadowFeatureCollection, ShadowCache, type BuildingFootprint } from '../lib/shadowEngine'
+
+// Module-lifetime cache; keyed by (buildingId, sun-bucket) inside the engine.
+const shadowCache = new ShadowCache()
 
 interface VenueMapProps {
   venues: Venue[]
@@ -21,143 +23,58 @@ export interface VenueMapHandle {
   flyTo: (lat: number, lng: number) => void
 }
 
-// Haversine distance in meters (kept for potential future use)
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371000 // Earth radius in meters
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLng = (lng2 - lng1) * Math.PI / 180
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng / 2) * Math.sin(dLng / 2)
-  const c = 2 * Math.asin(Math.sqrt(a))
-  return R * c
+// Extract building footprints currently in view from the Mapbox vector source.
+// querySourceFeatures returns geometry already in lng/lat.
+function extractBuildings(map: any): BuildingFootprint[] {
+  const feats = map.querySourceFeatures('composite', { sourceLayer: 'building' })
+  const out: BuildingFootprint[] = []
+  for (const f of feats) {
+    const g = f.geometry
+    if (!g) continue
+    const height = Number(f.properties?.height ?? f.properties?.render_height ?? 20) || 20
+    const rings: number[][][] =
+      g.type === 'Polygon' ? [g.coordinates[0]]
+      : g.type === 'MultiPolygon' ? g.coordinates.map((poly: number[][][]) => poly[0])
+      : []
+    rings.forEach((ring, i) => {
+      if (!Array.isArray(ring) || ring.length < 3) return
+      const base = f.id != null ? String(f.id) : `${ring[0][0].toFixed(6)},${ring[0][1].toFixed(6)}`
+      out.push({
+        id: rings.length > 1 ? `${base}#${i}` : base,
+        ring: ring as [number, number][],
+        height,
+      })
+    })
+  }
+  return out
 }
 
-// Compute the shadow offset vector (in degrees) for a given building height and sun position.
-// Returns [offsetLng, offsetLat] — the displacement from building base to shadow tip.
-function computeShadowOffset(
-  buildingHeight: number,
-  sunAzimuth: number,
-  sunAltitude: number,
-): [number, number] {
-  if (sunAltitude <= 0) return [0, 0]
-
-  // shadow_distance = height / tan(altitude), converted from metres to degrees
-  const shadowLength = buildingHeight / Math.tan(sunAltitude) / 111000
-
-  // sunAzimuth: south=0, clockwise in radians. Shadow falls opposite the sun.
-  const bearing = (sunAzimuth * 180 / Math.PI + 180) % 360
-  const bearingRad = (bearing - 90) * Math.PI / 180
-
-  return [
-    Math.cos(bearingRad) * shadowLength,
-    Math.sin(bearingRad) * shadowLength,
-  ]
-}
-
-// Generate GeoJSON shadow features from map buildings
-// IMPORTANT: Subtracts building footprints so shadows only appear outside buildings
-interface ShadowDialParams {
-  opacityMinFloor: number
-  opacityMaxCap: number
-  opacityMult: number
-}
-
+// Build the ground-shadow FeatureCollection for the current view via the headless,
+// unit-tested shadowEngine — viewport-culled and cached per (building, sun-bucket).
 function generateShadowFeatures(
   map: any,
   sunAzimuth: number,
   sunAltitude: number,
   centerLat: number,
-  dialParams?: ShadowDialParams
 ): GeoJSON.FeatureCollection {
-  const features: GeoJSON.Feature[] = []
-
-  if (sunAltitude <= 0) {
-    return { type: 'FeatureCollection', features: [] }
+  if (sunAltitude <= 0) return { type: 'FeatureCollection', features: [] }
+  const b = map.getBounds()
+  const fc = buildShadowFeatureCollection(extractBuildings(map), {
+    sun: { azimuth: sunAzimuth, altitude: sunAltitude },
+    bounds: { minLng: b.getWest(), minLat: b.getSouth(), maxLng: b.getEast(), maxLat: b.getNorth() },
+    atLat: centerLat,
+    cache: shadowCache,
+  })
+  if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
+    console.log(`[Shadow] ${fc.features.length} shadow features (alt ${(sunAltitude * 180 / Math.PI).toFixed(1)}°)`)
   }
-
-  // Query buildings from the map's composite source
-  try {
-    const buildings = map.querySourceFeatures('composite', {
-      sourceLayer: 'building',
-    })
-
-    // Debug: log building count
-    if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
-      console.log(`[Shadow] Found ${buildings.length} buildings, altitude: ${(sunAltitude * 180 / Math.PI).toFixed(1)}°, azimuth: ${(sunAzimuth * 180 / Math.PI).toFixed(1)}°`)
-    }
-
-    buildings.forEach((building: any) => {
-      const height = building.properties?.height || 20 // Default 20m if not specified
-      const geometry = building.geometry
-
-      if (geometry && geometry.type === 'Polygon') {
-        const footprint: number[][] = geometry.coordinates[0]
-        if (!Array.isArray(footprint) || footprint.length < 3) return
-
-        const [offsetLng, offsetLat] = computeShadowOffset(height, sunAzimuth, sunAltitude)
-        if (offsetLng === 0 && offsetLat === 0) return
-
-        try {
-          // Shadow tip points: each footprint vertex shifted in the shadow direction
-          const shadowTips = footprint.map(([lng, lat]) => [lng + offsetLng, lat + offsetLat])
-
-          // Build the swept shadow polygon as the convex hull of footprint + shadow tips.
-          // This guarantees the shadow is ATTACHED to the building — no floating.
-          const allPoints = turf.featureCollection(
-            [...footprint, ...shadowTips].map(p => turf.point(p as [number, number]))
-          )
-          const hull = turf.convex(allPoints)
-          if (!hull) return
-
-          // Ensure footprint polygon is closed
-          const closedFootprint = footprint[footprint.length - 1][0] === footprint[0][0] &&
-                                  footprint[footprint.length - 1][1] === footprint[0][1]
-            ? footprint : [...footprint, footprint[0]]
-
-          const buildingPoly = turf.polygon([closedFootprint])
-
-          // Subtract the building itself — show only the ground shadow outside the building
-          const shadowOnly = turf.difference(hull, buildingPoly)
-          if (!shadowOnly?.geometry) return
-
-          const opacityBase = Math.sin(sunAltitude)
-          const minFloor = dialParams?.opacityMinFloor ?? 0.15
-          const maxCap   = dialParams?.opacityMaxCap   ?? 0.60
-          const mult     = dialParams?.opacityMult     ?? 0.70
-          const opacity = Math.max(minFloor, Math.min(maxCap, opacityBase * mult))
-
-          if (shadowOnly.geometry.type === 'Polygon' || shadowOnly.geometry.type === 'MultiPolygon') {
-            features.push({
-              type: 'Feature',
-              geometry: shadowOnly.geometry,
-              properties: { height, opacity, altitude: sunAltitude * 180 / Math.PI },
-            })
-          }
-        } catch {
-          // Skip malformed building geometry silently
-          return
-        }
-      }
-    })
-
-    if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
-      console.log(`[Shadow] Generated ${features.length} shadow polygons (building footprints subtracted)`)
-    }
-  } catch (e) {
-    if (typeof window !== 'undefined' && (window as any).__DEBUG_SHADOWS) {
-      console.error('[Shadow] Query failed:', e)
-    }
-  }
-
-  return { type: 'FeatureCollection', features }
+  return fc
 }
 
 // SunCalc azimuth: radians from south, clockwise (south=0, west=π/2).
 // Mapbox setLight position[1]: degrees from north, clockwise (north=0, east=90).
 // Mapbox setLight position[2]: elevation in degrees above surface (0=horizon, 90=zenith).
-function applySunLight(map: any, lat: number, lng: number, atTime: Date, dialParams?: ShadowDialParams) {
+function applySunLight(map: any, lat: number, lng: number, atTime: Date) {
   const { altitude, azimuth } = SunCalc.getPosition(atTime, lat, lng)
   const mapboxAzimuth = ((azimuth * 180 / Math.PI) + 180) % 360
   const elevationDeg = altitude * 180 / Math.PI
@@ -180,7 +97,7 @@ function applySunLight(map: any, lat: number, lng: number, atTime: Date, dialPar
   }
 
   // Update ground shadows only (removed 3D volume layer to avoid double shadows)
-  const shadowFeatures = generateShadowFeatures(map, azimuth, altitude, lat, dialParams)
+  const shadowFeatures = generateShadowFeatures(map, azimuth, altitude, lat)
   const shadowSource = map.getSource('shadow-source')
   if (shadowSource) {
     shadowSource.setData(shadowFeatures)
@@ -358,17 +275,34 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
       })
 
       // Apply sun light at scrubbed time if set, otherwise at current real time
-      applySunLight(map, 59.3293, 18.0686, scrubbedTimeRef.current ?? new Date(), dial)
+      applySunLight(map, 59.3293, 18.0686, scrubbedTimeRef.current ?? new Date())
 
-      // Update shadows every 15 seconds as sun moves (reduced from 5s for performance)
-      // Only recalculate when zoom is appropriate for shadow rendering (zoom >= 12)
+      // ── Event-driven shadow recompute ──────────────────────────────────────
+      // Shadows redraw when the map settles after a pan/zoom (so newly revealed
+      // areas always fill in) and on a slow clock tick. Geometry is viewport-culled
+      // and cached per (building, sun-bucket), so these calls are cheap.
+      const ZOOM_MIN = 12
+      const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
+
+      const recomputeShadows = () => {
+        const src = map.getSource('shadow-source')
+        if (map.getZoom() < ZOOM_MIN) { if (src) src.setData(EMPTY_FC); return }
+        applySunLight(map, 59.3293, 18.0686, scrubbedTimeRef.current ?? new Date())
+      }
+
+      let moveTimer: ReturnType<typeof setTimeout> | null = null
+      const onMoveSettle = () => {
+        if (moveTimer) clearTimeout(moveTimer)
+        moveTimer = setTimeout(recomputeShadows, 150)
+      }
+      map.on('moveend', onMoveSettle)
+      map.on('zoomend', onMoveSettle)
+
+      // Slow tick advances the real-time sun; near-free when the sun bucket is unchanged.
       const shadowInterval = setInterval(() => {
-        if (scrubbedTimeRef.current !== undefined) return // user is scrubbing — don't auto-advance
-        const zoom = map.getZoom()
-        if (zoom >= 12) {
-          applySunLight(map, 59.3293, 18.0686, new Date(), dial)
-        }
-      }, 15000)
+        if (scrubbedTimeRef.current !== undefined) return // user is scrubbing
+        recomputeShadows()
+      }, 30000)
 
       // 3D pitch toggle + tilt controls — brutalist styling, bottom-left.
       // Mobile: 5.5rem (88px) to clear the 80px scrubber panel. Desktop: 4.5rem.
@@ -467,6 +401,9 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
       const originalRemove = map.remove.bind(map)
       map.remove = function() {
         clearInterval(shadowInterval)
+        if (moveTimer) clearTimeout(moveTimer)
+        map.off('moveend', onMoveSettle)
+        map.off('zoomend', onMoveSettle)
         controlsDiv.remove()
         originalRemove()
       }
@@ -562,7 +499,7 @@ const VenueMapComponent = forwardRef<VenueMapHandle, VenueMapProps>(
       if (shadowDebounceRef.current) clearTimeout(shadowDebounceRef.current)
       shadowDebounceRef.current = setTimeout(() => {
         const m = mapRef.current
-        if (m && m.loaded()) applySunLight(m, 59.3293, 18.0686, scrubbedTime, dial)
+        if (m && m.loaded()) applySunLight(m, 59.3293, 18.0686, scrubbedTime)
       }, 100)
       return () => {
         if (shadowDebounceRef.current) clearTimeout(shadowDebounceRef.current)
